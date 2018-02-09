@@ -64,3 +64,4 @@ void pc::mouseReleaseEvent(QMouseEvent *)
 		name->setText("settings");
 	}
 }
+
