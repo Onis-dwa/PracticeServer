@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/images">
+        <file>pc logo/PC.png</file>
+        <file>pc logo/PC_CLIENT_DOWN.png</file>
+        <file>pc logo/PC_OFF.png</file>
+        <file>pc logo/PC_ON.png</file>
+    </qresource>
+</RCC>
