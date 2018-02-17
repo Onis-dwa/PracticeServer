@@ -25,6 +25,7 @@ public:
 	Ui::MainServer* ui;
 
 	void logfile(const QString& str);
+	bool unsave;
 
 private:
 	QTcpServer* mTcpServer;
@@ -43,9 +44,13 @@ private:
 	uint loadSettings();
 	void loadpcs();
 
+protected:
+	virtual void closeEvent(QCloseEvent *event);
+
 public slots:
 	void slotNewConnection();
 
+	void saveFile(bool);
 	void menuSettings(bool);
 	void settingsChanged(quint16, QString, QString);
 	void newPC(pcData&);

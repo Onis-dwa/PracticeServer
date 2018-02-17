@@ -6,6 +6,7 @@
 
 #include <QMessageBox>
 #include <QDateTime>
+#include <QCloseEvent>
 
 // public
 MainServer::MainServer(QWidget *parent) :
@@ -41,6 +42,7 @@ MainServer::MainServer(QWidget *parent) :
 	layout->setSizeConstraint(layout->SetDefaultConstraint);
 	ui->CW->setLayout(layout);
 
+	connect(ui->menuBar->addAction("Сохранить"), SIGNAL(triggered(bool)), SLOT(saveFile(bool)));
 	connect(ui->menuBar->addAction("Настройки"), SIGNAL(triggered(bool)), SLOT(menuSettings(bool)));
 	QAction* btn = ui->menuBar->addAction("Добавить PC");
 	connect(btn, &QAction::toggled, ws, &WS::slotToggleBtn);
@@ -51,6 +53,7 @@ MainServer::MainServer(QWidget *parent) :
 	pclist = new QList<pc*>();
 	loadpcs();
 	connect(ws, &WS::newPC, this, &MainServer::newPC);
+	unsave = false;
 }
 MainServer::~MainServer()
 {
@@ -159,6 +162,28 @@ void MainServer::loadpcs()
 	fpcs->close();
 }
 
+// protected
+void MainServer::closeEvent(QCloseEvent *event)
+{
+	if (!unsave) {
+		event->accept();
+		return;
+	}
+
+	int choose = QMessageBox::warning(this, "Изменения не сохранены!", "Сохранить изменения?", "Сохранить", "Не сохранять", "Отмена", 0, 1);
+
+	if (choose == 0) {
+		saveFile(false);
+		event->accept();
+	}
+	else if (choose == 1) {
+		event->accept();
+	}
+	else {
+		event->ignore();
+	}
+}
+
 // public slot
 void MainServer::slotNewConnection()
 {
@@ -178,6 +203,25 @@ void MainServer::slotNewConnection()
 			return;
 		}
 	}
+}
+
+void MainServer::saveFile(bool)
+{
+	if (fpcs->open(QIODevice::WriteOnly | QIODevice::Text)) {
+		QTextStream out (fpcs);
+		pcData* dt;
+
+		for (int i = 0; i < pclist->count(); i++) {
+			dt = pclist->at(i)->GetData();
+			out << dt->x << ' ' <<
+				   dt->y << ' ' <<
+				   dt->Name << ' ' <<
+				   dt->IP << " \n";
+		}
+		fpcs->close();
+	}
+	logfile("pcs file update");
+	unsave = false;
 }
 void MainServer::menuSettings(bool)
 {
@@ -213,36 +257,6 @@ void MainServer::settingsChanged(quint16 port, QString nlf, QString npf)
 	}
 	logfile("settings changed to: " + QString::number(port) + " " + nlf + " " + npf);
 }
-//void MainServer::SetChanged(QString name, QString ip, QString oldip)
-//{
-//	return;
-
-//	if (!fpcs->open(QIODevice::ReadWrite | QIODevice::Text)) {
-//		QMessageBox::critical(0, "Pc's error", "failed append to file");
-//		return;
-//	}
-
-//	QString line;
-//	QStringList buf;
-
-//	while (!fpcs->atEnd()) {
-//		line = fpcs->readLine();
-//		buf = line.split(' ');
-
-//		if (buf.at(3) == oldip) {
-//			fpcs->seek(fpcs->pos() - line.length() - 1);
-
-//			QTextStream out (fpcs);
-//			out << buf.at(0) << " " <<
-//				   buf.at(1) << " " <<
-//				   name << " " <<
-//				   ip << " \n";
-//		}
-//	}
-//	fpcs->close();
-
-//	logfile(name + " settings changed!");
-//}
 void MainServer::newPC(pcData& data)
 {
 	if (!fpcs->open(QIODevice::Append | QIODevice::Text)) {
@@ -260,4 +274,5 @@ void MainServer::newPC(pcData& data)
 	pc* npc = ws->addPc(data);
 	pclist->push_back(npc);
 //	connect(npc, SIGNAL(SetChanged(QString,QString)), this, SLOT(SetChanged(QString, QString)));
+	unsave = true;
 }

@@ -46,7 +46,7 @@ protected:
 private slots:
 	void ReadClient();
 	void Disconnect();
-//	void PcSetChanged(QString,QString);
+	void PcSetChanged(QString, QString);
 };
 
 #endif // PC_H

@@ -23,9 +23,7 @@ void ping(pc* ipc)
 	LPVOID ReplyBuffer = NULL;				// Буффер ответов
 	DWORD ReplySize = 0;					// Размер буффера ответов
 
-	// Устанавливаем IP-адрес из поля lineEdit
-	ipaddr = inet_addr(ipc->GetData()->IP.toStdString().c_str());
-	hIcmpFile = IcmpCreateFile();   // Создаём обработчик
+// setip
 
 	// Выделяем память под буффер ответов
 	ReplySize = sizeof(ICMP_ECHO_REPLY) + sizeof(SendData);
@@ -49,6 +47,10 @@ void ping(pc* ipc)
 		if (ipc != cpc) {
 			std::terminate();
 		}
+
+		// Устанавливаем IP-адрес из поля lineEdit
+		ipaddr = inet_addr(ipc->GetData()->IP.toStdString().c_str());
+		hIcmpFile = IcmpCreateFile();   // Создаём обработчик
 
 		//----------------------------------------------------------------------------------------------------
 		// Вызываем функцию ICMP эхо запроса
@@ -124,7 +126,7 @@ pc::pc(const pcData& data, QWidget *parent) : QWidget(parent)
 	ip = data.IP; // ip
 	set = new PcSet(this);
 	isActive = false;
-//	connect(set, SIGNAL(PcSetChanged(QString,QString)), SLOT(PcSetChanged(QString,QString)));
+	connect(set, SIGNAL(PcSetChanged(QString,QString)), SLOT(PcSetChanged(QString,QString)));
 
 	// instant ping
 	std::thread tping (ping, this);
@@ -164,7 +166,6 @@ pcData* pc::GetData()
 
 	return dt;
 }
-
 void pc::SetPixmap(QString name)
 {
 	img->setPixmap(QPixmap(":/images/pc logo/" + name));
@@ -191,6 +192,7 @@ void pc::mouseMoveEvent(QMouseEvent*)
 	int Y = this->cursor().pos().y() - MServ->geometry().y() - 20;
 
 	this->setGeometry(X - lx, Y - ly, 48, 101);
+	MServ->unsave = true;
 }
 void pc::mousePressEvent(QMouseEvent *)
 {
@@ -241,4 +243,11 @@ void pc::Disconnect()
 	isActive = false;
 
 	Socket->close();
+}
+
+void pc::PcSetChanged(QString NAME, QString IP)
+{
+	name->setText(NAME);
+	ip = IP;
+	MServ->unsave = true;
 }
