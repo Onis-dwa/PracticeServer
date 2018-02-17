@@ -10,6 +10,15 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 TARGET = Server
 TEMPLATE = app
+CONFIG += c++11
+#QMAKE_CXXFLAGS += -std=c++11
+#QMAKE_CXXFLAGS += -pthread -std=c++11
+#QMAKE_LFLAGS += -Wl,--no-as-needed
+
+#LIBS += -pthread
+#LIBS += -lpthread -lrt
+LIBS     += -lws2_32
+LIBS     += -liphlpapi
 
 # The following define makes your compiler emit warnings if you use
 # any feature of Qt which has been marked as deprecated (the exact warnings
@@ -27,15 +36,21 @@ SOURCES += \
         main.cpp \
 		mainserver.cpp \
     pc.cpp \
-    ws.cpp
+    ws.cpp \
+    settings.cpp \
+    pcset.cpp
 
 HEADERS += \
 		mainserver.h \
     pc.h \
-    ws.h
+    ws.h \
+    settings.h \
+    pcset.h
 
 FORMS += \
-        mainserver.ui
+        mainserver.ui \
+    settings.ui \
+    pcset.ui
 
 RESOURCES += \
     resources.qrc

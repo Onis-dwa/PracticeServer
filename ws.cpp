@@ -3,63 +3,54 @@
 
 #include <QMouseEvent>
 
+// public
 WS::WS(MainServer* MSrv, QWidget *parent) : QWidget(parent)
 {
-	posx = new QLabel(this);
-	posx->setGeometry(5,5, 50, 13);
-
-	posy = new QLabel(this);
-	posy->setGeometry(5,23, 50, 13);
-
-	addbtn = new QPushButton(this);
-	addbtn->setGeometry(5, 41, 50, 21);
-	addbtn->setText("Add PC");
-	addbtn->setCheckable(true);
-	addbtn->setChecked(false);
-
-	connect(addbtn, SIGNAL(toggled(bool)), SLOT(slotToggleBtn(bool)));
-
 	add = false;
 	MServ = MSrv;
-	this->setMouseTracking(true);
 	this->show();
 }
-
 WS::~WS()
 {
-	delete posx;
-	delete posy;
-	delete addbtn;
 	MServ = NULL;
 }
-
-void WS::mouseMoveEvent(QMouseEvent*)
+pc* WS::addPc(pcData &data)
 {
-	X = this->cursor().pos().x() - MServ->x() - 8;
-	Y = this->cursor().pos().y() - MServ->y() - 31;
-	posx->setText(QString::number(X));
-	posy->setText(QString::number(Y));
+	return new pc(data, this);
 }
 
+
+// protected
 void WS::mouseReleaseEvent(QMouseEvent* m)
 {
-	if (add && (m->button() & Qt::RightButton)) {
-		// add pc in coordinate
-		pc* npc = new pc(X, Y, MServ, this);
-		add = false;
-		addbtn->setChecked(false);
+	if (add && (m->button() & Qt::LeftButton)) {
+		int X = this->cursor().pos().x() - MServ->x() - 8;
+		int Y = this->cursor().pos().y() - MServ->y() - 52;
+
+		pcData* dt = new pcData();
+		dt->x = X;
+		dt->y = Y;
+		dt->MServ = MServ;
+		dt->Name = "localhost";
+		dt->IP = "127.0.0.1";
+
+		this->newPC(*dt);
+		this->slotToggleBtn(false);
 	}
 }
 
-void WS::slotToggleBtn(bool)
+// public slots
+void WS::slotToggleBtn(bool state)
 {
-	if (add) {
-		add = false;
-		this->setCursor(QCursor(Qt::ArrowCursor));
-	}
-	else {
+	if (state) {
 		add = true;
 		this->setCursor(QCursor(Qt::CrossCursor));
+		this->SetChecked(true);
+	}
+	else {
+		add = false;
+		this->setCursor(QCursor(Qt::ArrowCursor));
+		this->SetChecked(false);
 	}
 }
 

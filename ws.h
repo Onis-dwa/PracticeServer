@@ -4,30 +4,26 @@
 #include "mainserver.h"
 
 #include <QWidget>
-#include <QLabel>
-#include <QPushButton>
 
+class MainServer;
 class WS : public QWidget
 {
 	Q_OBJECT
 public:
 	explicit WS(MainServer* MSrv, QWidget *parent = 0);
 	~WS();
+	pc* addPc(pcData& data);
 
 private:
-	QLabel* posx;
-	QLabel* posy;
-	QPushButton* addbtn;
 	MainServer* MServ;
 	bool add;
-	int X;
-	int Y;
 
 protected:
-	virtual void mouseMoveEvent(QMouseEvent*);
 	virtual void mouseReleaseEvent(QMouseEvent*);
 
 signals:
+	void SetChecked(bool);
+	void newPC(pcData&);
 
 public slots:
 	void slotToggleBtn(bool);

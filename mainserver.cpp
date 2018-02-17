@@ -1,114 +1,263 @@
 #include "mainserver.h"
 #include "ui_mainserver.h"
 #include "ws.h"
+#include "pc.h"
+#include "settings.h"
 
 #include <QMessageBox>
-#include <QTime>
-#include <QGridLayout>
+#include <QDateTime>
 
+// public
 MainServer::MainServer(QWidget *parent) :
 	QMainWindow(parent),
 	ui(new Ui::MainServer)
 {
-	ui->setupUi(this);
-
+	uint port = loadSettings();
 	mTcpServer = new QTcpServer(this);
-	if (!mTcpServer->listen(QHostAddress::LocalHost, 32094)){
+	if (!mTcpServer->listen(QHostAddress::AnyIPv4, port)){
 		QMessageBox::critical(0, "Server error", "Unable to srart the server:" + mTcpServer->errorString());
 
 		mTcpServer->close();
-//		ui->listWidget->addItem("Server is not started");
+		logfile("Server is not started");
 		return;
 	}
+	connect(mTcpServer, SIGNAL(newConnection()), SLOT(slotNewConnection()));
+	logfile("Server started");
 
-	connect(mTcpServer, &QTcpServer::newConnection, this, &MainServer::slotNewConnection);
-//	ui->listWidget->addItem("Server started");
 
-//	connect(ui->addpc, SIGNAL(clicked(bool)), SLOT(AddPC(bool)));
-//	connect(ui->WS, &QWidget::mouseMoveEvent,this, &MainServer::MouseMove);
-//	connect(,SIGNAL(),SLOT());
+	ui->setupUi(this);
+	mTcpSocket = NULL;
 	iNextBlockSize = 0;
+	winset = new Settings(this);
+	connect(winset, SIGNAL(settingsChanged(quint16, QString, QString)),
+					SLOT(settingsChanged(quint16, QString, QString)));
 
-	WS* ws = new WS(this, ui->CW);
-	QGridLayout* layout = new QGridLayout;
+
+	ws = new WS(this, ui->CW);
+	layout = new QGridLayout;
 	layout->addWidget(ws);
 	layout->setMargin(0);
 	layout->setSpacing(0);
 	layout->setSizeConstraint(layout->SetDefaultConstraint);
-
 	ui->CW->setLayout(layout);
-//	ui->CW->stackUnder(ws);
-//	ws->stackUnder(ui->CW);
-//	this->cursor().setShape(Qt::CrossCursor);
-//	ui->CW->cursor().setShape(Qt::CrossCursor);
-//	ws->setCursor(QCursor(Qt::CrossCursor));
-}
 
+	connect(ui->menuBar->addAction("Настройки"), SIGNAL(triggered(bool)), SLOT(menuSettings(bool)));
+	QAction* btn = ui->menuBar->addAction("Добавить PC");
+	connect(btn, &QAction::toggled, ws, &WS::slotToggleBtn);
+	connect(ws, &WS::SetChecked, btn, &QAction::setChecked);
+	btn->setCheckable(true);
+	btn->setChecked(false);
+
+	pclist = new QList<pc*>();
+	loadpcs();
+	connect(ws, &WS::newPC, this, &MainServer::newPC);
+}
 MainServer::~MainServer()
 {
-	// логи
+	logfile("Server closed");
+
 	delete ui;
+	delete mTcpServer;
+
+	if (mTcpSocket != NULL)
+		delete mTcpSocket;
+
+	delete flog;
+	delete fsettings;
+	delete fpcs;
+
+	for (int i = 0; i < pclist->count(); i++) {
+		delete pclist->at(i);
+	}
+	delete pclist;
+}
+void MainServer::logfile(const QString& str)
+{
+	if (!flog->open(QIODevice::Append | QIODevice::Text)) {
+		QMessageBox::critical(0, "Log error", "Failed write to file");
+		return;
+	}
+
+	QTextStream out(flog);
+	out << QDateTime::currentDateTime().date().year() << "." <<
+		   QDateTime::currentDateTime().date().month() << "." <<
+		   QDateTime::currentDateTime().date().day() << "-" <<
+		   QDateTime::currentDateTime().time().hour() << ":" <<
+		   QDateTime::currentDateTime().time().minute() << ":" <<
+		   QDateTime::currentDateTime().time().second() << "-" <<
+		   str << "\n";
+	flog->close();
 }
 
+// private
+uint MainServer::loadSettings()
+{
+	uint port;
+	QString strlog;
+	QString strpcs;
+	QStringList buf;
+
+	fsettings = new QFile("settings.txt");
+	if (fsettings->exists()) {
+		if (fsettings->open(QIODevice::ReadOnly | QIODevice::Text)) {
+			strlog = fsettings->readLine();
+			buf = strlog.split(' ');
+
+			port = buf.at(0).toUInt();
+			strlog = buf.at(1);
+			strpcs = buf.at(2);
+		}
+	}
+	else {
+		if (fsettings->open(QIODevice::WriteOnly | QIODevice::Text)) {
+			QTextStream out (fsettings);
+			out << "32094 log.txt pcs.txt";
+		}
+		port = 32094;
+		strlog = "log.txt";
+		strpcs = "pcs.txt";
+	}
+
+	flog = new QFile(strlog);
+	fpcs = new QFile(strpcs);
+	fsettings->close();
+
+	return port;
+}
+void MainServer::loadpcs()
+{
+	if (!fpcs->exists()) {
+		QMessageBox::critical(0, "PC's file error", "File does not exists");
+		return;
+	}
+	if (!fpcs->open(QIODevice::ReadOnly | QIODevice::Text)) {
+		QMessageBox::critical(0, "PC's file error", "Failed read to file");
+		return;
+	}
+
+	QStringList buf;
+	pcData* dt = new pcData();
+
+	try {
+		while (!fpcs->atEnd()) {
+			buf = ((QString)fpcs->readLine()).split(' ');
+
+			dt->x = buf.at(0).toInt();
+			dt->y = buf.at(1).toInt();
+			dt->MServ = this;
+			dt->Name = buf.at(2);
+			dt->IP = buf.at(3);
+
+			pc* npc = ws->addPc(*dt);
+			pclist->push_back(npc);
+//			connect(npc, SIGNAL(SetChanged(QString, QString, QString)), this, SLOT(SetChanged(QString, QString, QString)));
+		}
+	}
+	catch (...) {
+		QMessageBox::critical(0, "PC's file error", "Failed is corrupt, error loading pc's");
+	}
+	fpcs->close();
+}
+
+// public slot
 void MainServer::slotNewConnection()
 {
-	QTcpSocket* pClientSocket = mTcpServer->nextPendingConnection();
+	mTcpSocket = mTcpServer->nextPendingConnection();
 
-	//connect(pClientSocket, &QTcpSocket::readyRead, this, &MainServer::deleteLater);
-	connect(pClientSocket, &QTcpSocket::readyRead, this, &MainServer::slotServerRead);
-	connect(pClientSocket, &QTcpSocket::disconnected, this, &MainServer::slotClientDisconnected);
+	if (pclist->count() < 1) {
+		mTcpSocket->close();
+		return;
+	}
 
-	// обработать подключение
-//	ui->listWidget->addItem("client connected!");
-//	pClientSocket->write("client connected!");
-//	sendToClient(pClientSocket, "Server responced: Connected!");
-}
+	for (int i = 0; i < pclist->count(); i++) {
+		qDebug() << "client" << mTcpSocket->peerAddress();
+		qDebug() << "ip: " + pclist->at(i)->GetData()->IP;
+		if (mTcpSocket->peerAddress().toString() == pclist->at(i)->GetData()->IP) {
+			pclist->at(i)->Connect(mTcpSocket);
 
-void MainServer::slotServerRead()
-{
-	QTcpSocket* pClientSocket = (QTcpSocket*)sender();
-	QDataStream in(pClientSocket);
-	in.setVersion(QDataStream::Qt_5_5);
-
-	for (;;) {
-		if (!iNextBlockSize) {
-			if (pClientSocket->bytesAvailable() < sizeof(quint16)) {
-				break;
-			}
-
-			in >> iNextBlockSize;
+			return;
 		}
-
-		if (pClientSocket->bytesAvailable() < iNextBlockSize) {
-			break;
-		}
-		QTime time;
-		QString str;
-		in >> time >> str;
-
-		QString strMessage = time.toString() + " " + "Client has sended: " + str;
-//		ui->listWidget->addItem(strMessage);
-		iNextBlockSize = 0;
-
-		sendToClient(pClientSocket, "Server received: \"" + str + "\"");
 	}
 }
-
-void MainServer::slotClientDisconnected()
+void MainServer::menuSettings(bool)
 {
-	((QTcpSocket*)sender())->close();
-	//	ui->listWidget->addItem("client disconnected!");
+	if (!winset->isVisible())
+	{
+		winset->setData(mTcpServer->serverAddress().toString(),
+						 mTcpServer->serverPort(),
+						 flog->fileName(),
+						 fpcs->fileName());
+		winset->show();
+	}
 }
-
-void MainServer::sendToClient(QTcpSocket *pSocket, const QString &str)
+void MainServer::settingsChanged(quint16 port, QString nlf, QString npf)
 {
-	QByteArray arrBlock;
-	QDataStream out(&arrBlock, QIODevice::WriteOnly);
-	out.setVersion(QDataStream::Qt_5_5);
-	out << quint16(0) << QTime::currentTime() << str;
+	mTcpServer->close();
+	mTcpServer = new QTcpServer(this);
+	if (!mTcpServer->listen(QHostAddress::AnyIPv4, port)){
+		QMessageBox::critical(0, "Server error", "Unable to change the port:" + mTcpServer->errorString());
 
-	out.device()->seek(0);
-	out << quint16(arrBlock.size() - sizeof(quint16));
+		mTcpServer->close();
+		logfile("Server stopped");
+		this->close();
+		return;
+	}
 
-	pSocket->write(arrBlock);
+	flog->setFileName(nlf);
+	fpcs->setFileName(npf);
+
+	if (fsettings->open(QIODevice::WriteOnly | QIODevice::Text)) {
+		QTextStream out (fsettings);
+		out << port << " " << nlf << " " <<npf;
+		fsettings->close();
+	}
+	logfile("settings changed to: " + QString::number(port) + " " + nlf + " " + npf);
+}
+//void MainServer::SetChanged(QString name, QString ip, QString oldip)
+//{
+//	return;
+
+//	if (!fpcs->open(QIODevice::ReadWrite | QIODevice::Text)) {
+//		QMessageBox::critical(0, "Pc's error", "failed append to file");
+//		return;
+//	}
+
+//	QString line;
+//	QStringList buf;
+
+//	while (!fpcs->atEnd()) {
+//		line = fpcs->readLine();
+//		buf = line.split(' ');
+
+//		if (buf.at(3) == oldip) {
+//			fpcs->seek(fpcs->pos() - line.length() - 1);
+
+//			QTextStream out (fpcs);
+//			out << buf.at(0) << " " <<
+//				   buf.at(1) << " " <<
+//				   name << " " <<
+//				   ip << " \n";
+//		}
+//	}
+//	fpcs->close();
+
+//	logfile(name + " settings changed!");
+//}
+void MainServer::newPC(pcData& data)
+{
+	if (!fpcs->open(QIODevice::Append | QIODevice::Text)) {
+		QMessageBox::critical(0, "PC's error", "Failed append to file");
+		return;
+	}
+
+	QTextStream out(fpcs);
+	out << data.x << ' '<<
+		   data.y << ' ' <<
+		   data.Name << ' ' <<
+		   data.IP << " \n";
+	fpcs->close();
+
+	pc* npc = ws->addPc(data);
+	pclist->push_back(npc);
+//	connect(npc, SIGNAL(SetChanged(QString,QString)), this, SLOT(SetChanged(QString, QString)));
 }
