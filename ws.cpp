@@ -4,53 +4,80 @@
 #include <QMouseEvent>
 
 // public
-WS::WS(MainServer* MSrv, QWidget *parent) : QWidget(parent)
+WS::WS(MainServer* MServer, QWidget *parent) : QWidget(parent)
 {
-	add = false;
-	MServ = MSrv;
+	QPalette palette;
+	palette.setBrush(QPalette::Background, QPixmap(":/res/resources/sota.png"));
+	this->setAutoFillBackground(true);
+	this->setPalette(palette);
+
+	this->setMouseTracking(true);
+
+	MServ = MServer;
+	isDrag = false;
+	isAddPC = false;
+	isAddDep = false;
 	this->show();
 }
 WS::~WS()
 {
-	MServ = NULL;
+
 }
-pc* WS::addPc(pcData &data)
-{
-	return new pc(data, this);
-}
-
-
-// protected
-void WS::mouseReleaseEvent(QMouseEvent* m)
-{
-	if (add && (m->button() & Qt::LeftButton)) {
-		int X = this->cursor().pos().x() - MServ->x() - 8;
-		int Y = this->cursor().pos().y() - MServ->y() - 52;
-
-		pcData* dt = new pcData();
-		dt->x = X;
-		dt->y = Y;
-		dt->MServ = MServ;
-		dt->Name = "localhost";
-		dt->IP = "127.0.0.1";
-
-		this->newPC(*dt);
-		this->slotToggleBtn(false);
-	}
-}
-
-// public slots
-void WS::slotToggleBtn(bool state)
+void WS::toggleAddPC(bool state)
 {
 	if (state) {
-		add = true;
+		isAddPC = true;
 		this->setCursor(QCursor(Qt::CrossCursor));
-		this->SetChecked(true);
 	}
 	else {
-		add = false;
+		isAddPC = false;
 		this->setCursor(QCursor(Qt::ArrowCursor));
-		this->SetChecked(false);
+	}
+}
+void WS::toggleAddDep(bool state)
+{
+	if (state) {
+		isAddDep = true;
+		this->setCursor(QCursor(Qt::CrossCursor));
+	}
+	else {
+		isAddDep = false;
+		this->setCursor(QCursor(Qt::ArrowCursor));
 	}
 }
 
+// protected
+void WS::mousePressEvent(QMouseEvent* m)
+{
+	if (m->button() & Qt::RightButton)
+	{
+		this->setCursor(QCursor(Qt::OpenHandCursor));
+		isDrag = true;
+	}
+	DragX = this->cursor().pos().x();
+	DragY = this->cursor().pos().y();
+}
+void WS::mouseMoveEvent(QMouseEvent*)
+{
+	if (isDrag)
+	{
+		MServ->moveWS(DragX - this->cursor().pos().x(), DragY - this->cursor().pos().y());
+
+		DragX = this->cursor().pos().x();
+		DragY = this->cursor().pos().y();
+	}
+}
+void WS::mouseReleaseEvent(QMouseEvent* m)
+{
+	if (!isDrag && isAddPC && (m->button() & Qt::LeftButton)) {
+		MServ->newPC(m->x(), m->y());
+	}
+	else if (!isDrag && isAddDep && (m->button() & Qt::LeftButton)) {
+		MServ->newDep(m->x(), m->y());
+	}
+	else
+	{
+		this->setCursor(QCursor(Qt::ArrowCursor));
+		isDrag = false;
+	}
+}

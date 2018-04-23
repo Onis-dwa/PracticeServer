@@ -1,21 +1,17 @@
 #include "pc.h"
+#include "dep.h"
 
 #include "winsock2.h"
 #include "iphlpapi.h"
 #include "icmpapi.h"
 
-//#include <iostream>
-//#include <windows.h>
 #include <thread>
-
 #include <QTime>
+#include <QMouseEvent>
 
 // locale
 void ping(pc* ipc)
 {
-	pc* cpc = ipc;
-	int i = 0;
-
 	HANDLE hIcmpFile;						// Обработчик
 	unsigned long ipaddr = INADDR_NONE;		// Адрес назначения
 	DWORD dwRetVal = 0;						// Количество ответов
@@ -40,13 +36,15 @@ void ping(pc* ipc)
 
 
 	while(true) {
-		qDebug() << ipc->GetData()->Name << " - " << i++;
-		qDebug() << "ipc = " << ipc;
-		qDebug() << "cpc = " << cpc;
-
-		if (ipc != cpc) {
-			std::terminate();
-		}
+		//qDebug() << ipc->GetData()->Name << " - " << i++;
+//		qDebug() << "ipc = " << ipc;
+//		//qDebug() << "cpc = " << cpc;
+		//	ЛОЛ ПОТОК МОЖНО НЕ ЗАВЕРШАТЬ!?!?!?!?
+//		if (ipc == NULL) {
+//			qDebug() << "ipc = " << ipc;
+//			std::terminate();
+//			break;
+//		}
 
 		// Устанавливаем IP-адрес из поля lineEdit
 		ipaddr = inet_addr(ipc->GetData()->IP.toStdString().c_str());
@@ -82,7 +80,7 @@ void ping(pc* ipc)
 //			strMessage += QString::number(GetLastError());
 		}
 
-		qDebug() << strMessage; // Отображаем информацию о полученных данных
+		//qDebug() << strMessage; // Отображаем информацию о полученных данных
 
 
 		//----------------------------------------------------------------------------------------------------
@@ -92,8 +90,12 @@ void ping(pc* ipc)
 }
 
 // public
-pc::pc(const pcData& data, QWidget *parent) : QWidget(parent)
+pc::pc(const pcData& data, QWidget *parent, MainServer* MServer) : QWidget(parent)
 {
+	unsaved = new QLabel(this);
+	unsaved->setPixmap(QPixmap(":/res/resources/Unsaved.png"));
+	unsaved->setScaledContents(true);
+
 	img = new QLabel(this);
 	img->setPixmap(QPixmap(":/images/pc logo/PC.png"));
 	img->setScaledContents(true);
@@ -112,6 +114,11 @@ pc::pc(const pcData& data, QWidget *parent) : QWidget(parent)
 	name->setMinimumWidth(48);
 	name->setMaximumWidth(48);
 
+	QPalette palette;
+	palette.setColor(QPalette::Window, Qt::white);
+	palette.setColor(QPalette::WindowText, Qt::white);
+	name->setPalette(palette);
+
 	layout = new QVBoxLayout;
 	layout->addWidget(img);
 	layout->addWidget(name);
@@ -120,29 +127,34 @@ pc::pc(const pcData& data, QWidget *parent) : QWidget(parent)
 
 	this->setLayout(layout);
 	this->setGeometry(data.x, data.y, 48, 69); // x,y
+	unsaved->raise();
+	unsaved->setGeometry(0, 30, 16, 16);
 	this->show();
 
-	MServ = data.MServ; // MServ
+	MServ = MServer;
 	ip = data.IP; // ip
-	set = new PcSet(this);
+	PcView = new pcview(this);
 	isActive = false;
-	connect(set, SIGNAL(PcSetChanged(QString,QString)), SLOT(PcSetChanged(QString,QString)));
+	connect(PcView, SIGNAL(PcSetChanged(QString,QString)), SLOT(PcSetChanged(QString,QString)));
 
 	// instant ping
 	std::thread tping (ping, this);
 	tping.detach();
 
-//	std::thread tping (ping);
-//	if (tping.joinable())
-//		tping.join();
-
+	NBlockSize = 0;
+	Socket = NULL;
+	drag = false;
+	view = false;
+	Dep = NULL;
 }
 pc::~pc() {
 	delete img;
 	delete name;
 	delete layout;
-	MServ = NULL;
-	Socket = NULL;
+	delete PcView;
+
+	if (Socket != NULL)
+		delete Socket;
 }
 void pc::Connect(QTcpSocket* skt) {
 	MServ->logfile(name->text() + " connected established from ip: " + ip);
@@ -160,7 +172,6 @@ pcData* pc::GetData()
 	pcData* dt = new pcData;
 	dt->x = this->x();
 	dt->y = this->y();
-	dt->MServ = MServ;
 	dt->Name = name->text();
 	dt->IP = ip;
 
@@ -185,38 +196,85 @@ void pc::SendClient(const QString& str) {
 }
 
 // protected
+void pc::mousePressEvent(QMouseEvent* m)
+{
+	if (m->button() & Qt::RightButton)
+	{
+		if (this->parent() == Dep)
+		{
+			this->setParent((QWidget*)MServ->GetWS());
+			this->move(this->x() + Dep->x(), this->y() + Dep->y());
+			this->show();
+		}
+
+		drag = true;
+		DragX = this->cursor().pos().x();
+		DragY = this->cursor().pos().y();
+	}
+	else
+		view = true;
+}
 void pc::mouseMoveEvent(QMouseEvent*)
 {
-	drag = true;
-	int X = this->cursor().pos().x() - MServ->geometry().x();
-	int Y = this->cursor().pos().y() - MServ->geometry().y() - 20;
+	if (drag)
+	{
+		int TX = this->x() - (DragX - this->cursor().pos().x());
+		int TY = this->y() - (DragY - this->cursor().pos().y());
+		int res = MServ->tryMove(this, TX, TY);
 
-	this->setGeometry(X - lx, Y - ly, 48, 101);
-	MServ->unsave = true;
-}
-void pc::mousePressEvent(QMouseEvent *)
-{
-	drag = false;
-	lx = this->cursor().pos().x() - MServ->geometry().x() - this->geometry().x();
-	ly = this->cursor().pos().y() - MServ->geometry().y() - 20 - this->geometry().y();
-}
-void pc::mouseReleaseEvent(QMouseEvent *)
-{
-	if (!drag) {
-		if (!set->isVisible()){
-			set->setData(name->text(), ip);
+		switch (res) {
+		case 1:
+			this->move(TX, TY);
+			DragX = this->cursor().pos().x();
+			DragY = this->cursor().pos().y();
+			break;
+		case 2:
+			this->move(TX, this->y());
+			DragX = this->cursor().pos().x();
+			break;
+		case 3:
+			this->move(this->x(), TY);
+			DragY = this->cursor().pos().y();
+			break;
+		}
 
-			set->show();
+		MServ->unsave = true;
+		unsaved->show();
+	}
+	else
+		view = false;
+}
+void pc::mouseReleaseEvent(QMouseEvent*)
+{
+	if (view) {
+		if (!PcView->isVisible()){
+			PcView->setData(name->text(), ip);
+
+			PcView->show();
+		}
+		view = false;
+	}
+	else
+	{
+		drag = false;
+
+		if (Dep != NULL && this->parent() != Dep)
+		{
+			this->setParent(Dep);
+			this->move(this->x() - Dep->x(), this->y() - Dep->y());
+			this->show();
 		}
 	}
 }
 
-// private slots
+// public slots
 void pc::ReadClient()
 {
+	qDebug() << "Read";
 	QDataStream in(Socket);
 	in.setVersion(QDataStream::Qt_5_5);
 
+	NBlockSize = 0;
 	while (true) {
 		if (!NBlockSize) {
 			if (Socket->bytesAvailable() < sizeof(quint16))
@@ -228,13 +286,129 @@ void pc::ReadClient()
 		if (Socket->bytesAvailable() < NBlockSize)
 			break;
 
-//		bool fuck;
+		QString Msg;
+		in >> Msg;
+		qDebug() << Msg;
 
-//		QTime time;
-//		time.
+		if (Msg == "Static")
+		{
+			staticInfo stI;
+			in >> stI;
+
+			qDebug() << stI.PCName;
+			qDebug() << stI.OS;
+			qDebug() << stI.Bit;
+			qDebug() << stI.CPU;
+			qDebug() << stI.GPU;
+			qDebug() << stI.RAM;
+			PcView->setData(stI);
+			NBlockSize = 0;
+			break;
+		}
+		else if (Msg == "Dynamic")
+		{
+			dynamicInfo dnI;
+			in >> dnI;
+
+			qDebug() << dnI.CPU;
+			qDebug() << dnI.GPU;
+			qDebug() << dnI.RAM;
+			PcView->setData(dnI);
+			NBlockSize = 0;
+			break;
+		}
+
+		NBlockSize = 0;
+	}
+}
+
+
+// private slots
+#include <QMessageBox>
+struct strct
+{
+	quint8 a;
+	QString b;
+	bool c;
+	float d;
+
+	QDataStream& operator >>(QDataStream& in)
+	{
+		return in << a << b << c << d;
+	}
+	QDataStream& operator <<(QDataStream& in)
+	{
+		return in >> a >> b >> c >> d;
+	}
+};
+struct strct2
+{
+	QString a;
+	QString b;
+	QString c;
+	quint8 d;
+	bool e;
+	float f;
+	QString g;
+
+	friend QDataStream& operator >>(QDataStream& in, strct2& st)
+	{
+		return in >> st.a >> st.b >> st.c >> st.d >> st.e >> st.f >> st.g;
+	}
+	friend QDataStream& operator <<(QDataStream& in, strct2& st)
+	{
+		return in << st.a << st.b << st.c << st.d << st.e << st.f << st.g;
+	}
+};
+void pc::ReadClient2()
+{
+	QDataStream in(Socket);
+	in.setVersion(QDataStream::Qt_5_5);
+
+	NBlockSize = 0;
+	while (true) {
+		if (!NBlockSize) {
+			if (Socket->bytesAvailable() < sizeof(quint16))
+				break;
+
+			in >> NBlockSize;
+		}
+
+		if (Socket->bytesAvailable() < NBlockSize)
+			break;
+
+		QString Msg;
+		in >> Msg;
+
+		if (Msg == "-t")
+		{
+			strct st;
+			//st.operator >>(in);
+			//in >> st;
+			st << in;
+
+			qDebug() << st.a;
+			qDebug() << st.b;
+			qDebug() << st.c;
+			qDebug() << st.d;
+		}
+		else if (Msg == "-w")
+		{
+			strct2 st;
+			in >> st;
+
+			qDebug() << st.a;
+			qDebug() << st.b;
+			qDebug() << st.c;
+			qDebug() << st.d;
+			qDebug() << st.e;
+			qDebug() << st.f;
+			qDebug() << st.g;
+		}
+
 		NBlockSize = 0;
 
-		SendClient("accepted");
+		//SendClient("accepted");
 	}
 }
 void pc::Disconnect()
@@ -250,4 +424,5 @@ void pc::PcSetChanged(QString NAME, QString IP)
 	name->setText(NAME);
 	ip = IP;
 	MServ->unsave = true;
+	unsaved->show();
 }

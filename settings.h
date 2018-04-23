@@ -16,13 +16,16 @@ public:
 	~Settings();
 	Ui::Settings* ui;
 
-	void setData(const QString& ip, const quint16& port, const QString& nameLogFile, const QString& namePcsFile);
+	void setData(const QString& ip,
+				 const quint16& port,
+				 const QString& nameLogFile,
+				 const QString& nameDataFile);
 
 private:
 	QString Ip;
 	quint16 Port;
 	QString Nlf;
-	QString Npf;
+	QString Ndf;
 
 signals:
 	void settingsChanged(quint16, QString, QString);

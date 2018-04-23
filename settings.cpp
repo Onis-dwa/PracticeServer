@@ -17,17 +17,17 @@ Settings::~Settings()
 void Settings::setData(const QString &ip,
 					   const quint16 &port,
 					   const QString &nameLogFile,
-					   const QString &namePcsFile)
+					   const QString &nameDataFile)
 {
 	Ip = ip;
 	Port = port;
 	Nlf = nameLogFile;
-	Npf = namePcsFile;
+	Ndf = nameDataFile;
 
 	ui->IP->setText(ip);
 	ui->Port->setText(QString::number(port));
 	ui->LogfileName->setText(nameLogFile);
-	ui->PCfileName->setText(namePcsFile);
+	ui->DatafileName->setText(nameDataFile);
 }
 
 
@@ -36,5 +36,5 @@ void Settings::accepted()
 {
 	settingsChanged(ui->Port->text().toShort(),
 					ui->LogfileName->text(),
-					ui->PCfileName->text());
+					ui->DatafileName->text());
 }

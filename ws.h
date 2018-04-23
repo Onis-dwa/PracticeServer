@@ -2,7 +2,6 @@
 #define WS_H
 
 #include "mainserver.h"
-
 #include <QWidget>
 
 class MainServer;
@@ -10,23 +9,26 @@ class WS : public QWidget
 {
 	Q_OBJECT
 public:
-	explicit WS(MainServer* MSrv, QWidget *parent = 0);
+	explicit WS(MainServer* MServer, QWidget *parent = 0);
 	~WS();
-	pc* addPc(pcData& data);
+
+	void toggleAddPC(bool);
+	void toggleAddDep(bool);
 
 private:
 	MainServer* MServ;
-	bool add;
+
+	bool isDrag;
+	bool isAddPC;
+	bool isAddDep;
+
+	int DragX;
+	int DragY;
 
 protected:
+	virtual void mousePressEvent(QMouseEvent *);
+	virtual void mouseMoveEvent(QMouseEvent*);
 	virtual void mouseReleaseEvent(QMouseEvent*);
-
-signals:
-	void SetChecked(bool);
-	void newPC(pcData&);
-
-public slots:
-	void slotToggleBtn(bool);
 };
 
 #endif // WS_H

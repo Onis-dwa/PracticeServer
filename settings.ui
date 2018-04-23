@@ -83,14 +83,14 @@
       </widget>
      </item>
      <item row="3" column="0">
-      <widget class="QLabel" name="pcsfile">
+      <widget class="QLabel" name="datafile">
        <property name="text">
-        <string>PC filename</string>
+        <string>Data filename:</string>
        </property>
       </widget>
      </item>
      <item row="3" column="1">
-      <widget class="QLineEdit" name="PCfileName"/>
+      <widget class="QLineEdit" name="DatafileName"/>
      </item>
     </layout>
    </item>

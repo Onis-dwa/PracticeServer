@@ -2,23 +2,28 @@
 #define PC_H
 
 #include "mainserver.h"
-#include "pcset.h"
+#include "pcview.h"
 
 #include <QWidget>
 #include <QLabel>
 #include <QVBoxLayout>
 
+class dep;
+class pcview;
 class pc : public QWidget
 {
 	Q_OBJECT
 public:
-	explicit pc(const pcData& data, QWidget *parent = 0);
+	explicit pc(const pcData& data, QWidget *parent, MainServer* MServer);
 	~pc();
 
 	void Connect(QTcpSocket* skt);
 	pcData* GetData();
 	void SetPixmap(QString);
+
 	bool isActive;
+	dep* Dep;
+	QLabel* unsaved;
 
 private:
 	QLabel* img;
@@ -27,26 +32,70 @@ private:
 
 	MainServer* MServ;
 	QTcpSocket* Socket;
-	PcSet* set;
+	pcview* PcView;
 
 	bool drag;
-	int lx;
-	int ly;
+	bool view;
+	int DragX;
+	int DragY;
 	quint8 NBlockSize;
 	QString ip;
 
 	void SendClient(const QString& str);
-//	void ping();
 
 protected:
 	virtual void mouseMoveEvent(QMouseEvent*);
 	virtual void mousePressEvent(QMouseEvent*);
 	virtual void mouseReleaseEvent(QMouseEvent*);
 
-private slots:
+public slots:
 	void ReadClient();
+
+private slots:
+	void ReadClient2();
 	void Disconnect();
 	void PcSetChanged(QString, QString);
+};
+struct staticInfo
+{
+	QString PCName;
+	QString OS;
+	QString Bit;
+	QString CPU;
+	QString GPU;
+	QString RAM;
+
+
+	friend inline QDataStream& operator >>(QDataStream& t, staticInfo& p)
+	{
+		return t >> p.PCName >> p.OS >> p.Bit >> p.CPU >> p.GPU >> p.RAM;
+	}
+	friend inline QDataStream& operator <<(QDataStream& t, staticInfo& p)
+	{
+		return t << p.PCName << "\n"
+				 << p.OS	 << "\n"
+				 << p.Bit	 << "\n"
+				 << p.CPU	 << "\n"
+				 << p.GPU	 << "\n"
+				 << p.RAM	 << "\n";
+	}
+};
+struct dynamicInfo
+{
+	double CPU;
+	double GPU;
+	double RAM;
+
+	friend inline QDataStream& operator >>(QDataStream& t, dynamicInfo& p)
+	{
+		return t >> p.CPU >> p.GPU >> p.RAM;
+	}
+	friend inline QDataStream& operator <<(QDataStream& t, dynamicInfo& p)
+	{
+		return t << p.CPU << "\n"
+				 << p.GPU << "\n"
+				 << p.RAM << "\n";
+	}
 };
 
 #endif // PC_H

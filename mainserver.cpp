@@ -2,77 +2,87 @@
 #include "ui_mainserver.h"
 #include "ws.h"
 #include "pc.h"
+#include "dep.h"
 #include "settings.h"
 
 #include <QMessageBox>
 #include <QDateTime>
 #include <QCloseEvent>
+#include <QNetworkInterface>
 
 // public
 MainServer::MainServer(QWidget *parent) :
 	QMainWindow(parent),
 	ui(new Ui::MainServer)
 {
-	uint port = loadSettings();
+	// SetUP
+	loadSettings();
+
 	mTcpServer = new QTcpServer(this);
-	if (!mTcpServer->listen(QHostAddress::AnyIPv4, port)){
-		QMessageBox::critical(0, "Server error", "Unable to srart the server:" + mTcpServer->errorString());
+	if (!mTcpServer->listen(QHostAddress::AnyIPv4, Serverport)){
+		QMessageBox::critical(0,
+							  "Server error",
+							  "Unable to srart the server:" + mTcpServer->errorString());
 
 		mTcpServer->close();
 		logfile("Server is not started");
 		return;
 	}
-	connect(mTcpServer, SIGNAL(newConnection()), SLOT(slotNewConnection()));
 	logfile("Server started");
 
-
+	// UploadUI
 	ui->setupUi(this);
+	ui->HomeButton->hide();
+	winset = new Settings(this);
+	ws = new WS(this, ui->MainWidget);
+	ws->setGeometry(0, 0, 25000, 25000);
+	ui->Center->stackUnder(ui->Menu);
+	ui->Center->setGeometry((this->width() - 4) / 2,
+							(this->height() - 4) / 2,
+							4, 4);
+	ws->stackUnder(ui->Center);
+	this->showMaximized();
+
+	// null's
 	mTcpSocket = NULL;
 	iNextBlockSize = 0;
-	winset = new Settings(this);
+	unsave = false;
+	pclist = new QList<pc*>();
+	deplist = new QList<dep*>();
+
+	// connect's
+	connect(mTcpServer, SIGNAL(newConnection()), SLOT(slotNewConnection()));
 	connect(winset, SIGNAL(settingsChanged(quint16, QString, QString)),
 					SLOT(settingsChanged(quint16, QString, QString)));
+	connect(ui->SaveButton, SIGNAL(clicked(bool)), SLOT(saveFile(bool)));
+	connect(ui->SettingsButon, SIGNAL(clicked(bool)), SLOT(menuSettings(bool)));
+	connect(ui->AddPC, SIGNAL(toggled(bool)), SLOT(AddPc(bool)));
+	connect(ui->AddDep, SIGNAL(toggled(bool)), SLOT(AddDep(bool)));
+	connect(ui->HomeButton, SIGNAL(clicked(bool)), SLOT(GoHome(bool)));
 
-
-	ws = new WS(this, ui->CW);
-	layout = new QGridLayout;
-	layout->addWidget(ws);
-	layout->setMargin(0);
-	layout->setSpacing(0);
-	layout->setSizeConstraint(layout->SetDefaultConstraint);
-	ui->CW->setLayout(layout);
-
-	connect(ui->menuBar->addAction("Сохранить"), SIGNAL(triggered(bool)), SLOT(saveFile(bool)));
-	connect(ui->menuBar->addAction("Настройки"), SIGNAL(triggered(bool)), SLOT(menuSettings(bool)));
-	QAction* btn = ui->menuBar->addAction("Добавить PC");
-	connect(btn, &QAction::toggled, ws, &WS::slotToggleBtn);
-	connect(ws, &WS::SetChecked, btn, &QAction::setChecked);
-	btn->setCheckable(true);
-	btn->setChecked(false);
-
-	pclist = new QList<pc*>();
-	loadpcs();
-	connect(ws, &WS::newPC, this, &MainServer::newPC);
-	unsave = false;
+	// load
+	loadData();
 }
 MainServer::~MainServer()
 {
 	logfile("Server closed");
 
-	delete ui;
 	delete mTcpServer;
-
 	if (mTcpSocket != NULL)
 		delete mTcpSocket;
-
-	delete flog;
-	delete fsettings;
-	delete fpcs;
 
 	for (int i = 0; i < pclist->count(); i++) {
 		delete pclist->at(i);
 	}
 	delete pclist;
+	delete ws;
+
+	delete flog;
+	delete fsettings;
+	delete fdata;
+
+	delete winset;
+	delete ui;
 }
 void MainServer::logfile(const QString& str)
 {
@@ -91,75 +101,265 @@ void MainServer::logfile(const QString& str)
 		   str << "\n";
 	flog->close();
 }
+void MainServer::moveWS(int x, int y)
+{
+	ws->move(ws->x() - x, ws->y() - y);
+
+	ui->Center->move(ui->Center->x() - x, ui->Center->y() - y);
+
+	if (ui->Center->x() < 0 ||
+		ui->Center->x() > this->width() ||
+		ui->Center->y() < 51 ||
+		ui->Center->y() > this->height())
+	{
+		ui->HomeButton->show();
+	}
+	else
+		ui->HomeButton->hide();
+}
+int MainServer::tryMove(pc *P, int &newx, int &newy)
+{
+	if (P->Dep != NULL)
+	{
+		if (!(P->x() >= P->Dep->x() &&
+			  P->x() <= P->Dep->x() + P->Dep->width() &&
+			  P->y() >= P->Dep->y() &&
+			  P->y() <= P->Dep->y() + P->Dep->height()))
+		{
+			P->stackUnder(P->Dep);
+			P->Dep = NULL;
+		}
+	}
+
+	bool x = true;
+	bool y = true;
+	pc* p;
+	dep* d;
+
+	// pc's
+	for(int i = 0; i < pclist->count(); i++) {
+		p = pclist->at(i);
+		if (p != P)
+			if (// Left Top
+				(newx		>= p->x() &&
+				 newx		<= p->x() + 48 &&
+				 newy		>= p->y() &&
+				 newy		<= p->y() + 69) ||
+				// Left Bottom
+				(newx		>= p->x() &&
+				 newx		<= p->x() + 48 &&
+				 newy + 69	>= p->y() &&
+				 newy + 69	<= p->y() + 69) ||
+				// Right Top
+				(newx + 48	>= p->x() &&
+				 newx + 48	<= p->x() + 48 &&
+				 newy		>= p->y() &&
+				 newy		<= p->y() + 69) ||
+				// Right Bottom
+				(newx + 48	>= p->x() &&
+				 newx + 48	<= p->x() + 48 &&
+				 newy + 69	>= p->y() &&
+				 newy + 69	<= p->y() + 69))
+			{
+				if (P->y()		< p->y() + 69 &&
+					P->y() + 69 > p->y()) { // Left & Right
+					x = false;
+				}
+				else { // Top & Bot
+					y = false;
+				}
+			}
+	}
+
+	// dep's
+	for(int i = 0; i < deplist->count(); i++) {
+		d = deplist->at(i);
+		if (// Left Top
+				(newx		>= d->x() &&
+				 newx		<= d->x() + d->width() &&
+				 newy		>= d->y() &&
+				 newy		<= d->y() + d->height()) ||
+				// Left Bottom
+				(newx		>= d->x() &&
+				 newx		<= d->x() + d->width() &&
+				 newy + 69	>= d->y() &&
+				 newy + 69	<= d->y() + d->height()) ||
+				// Right Top
+				(newx + 48	>= d->x() &&
+				 newx + 48	<= d->x() + d->width() &&
+				 newy		>= d->y() &&
+				 newy		<= d->y() + d->height()) ||
+				// Right Bottom
+				(newx + 48	>= d->x() &&
+				 newx + 48	<= d->x() + d->width() &&
+				 newy + 69	>= d->y() &&
+				 newy + 69	<= d->y() + d->height()))
+		{
+			if (newx		> d->x() &&
+				newy		> d->y() &&
+				newx + 48	< d->x() + d->width() &&
+				newy + 69	< d->y() + d->height())
+			{
+				d->DropDown(true);
+
+				P->raise();
+				P->Dep = d;
+			}
+			else if (P->y()		< d->y() + d->height() &&
+				P->y() + 69	> d->y()) { // Left & Right
+				x = false;
+			}
+			else { // Top & Bot
+				y = false;
+			}
+		}
+		else
+		{
+			d->DropDown(false);
+		}
+	}
+
+	if (x && y)
+		return 1;
+	else if (x && !y)
+		return 2;
+	else if (!x && y)
+		return 3;
+	else
+		return 0;
+}
+int MainServer::tryDepMove(dep *P, int &newx, int &newy)
+{
+	bool x = true;
+	bool y = true;
+	dep* d;
+
+	for(int i = 0; i < deplist->count(); i++) {
+		d = deplist->at(i);
+		if (d != P)
+		{
+			if (// Left Top
+					(newx				>= d->x() &&
+					 newx				<= d->x() + d->width() &&
+					 newy				>= d->y() &&
+					 newy				<= d->y() + d->height()) ||
+					// Left Bottom
+					(newx				>= d->x() &&
+					 newx				<= d->x() + d->width() &&
+					 newy + P->height()	>= d->y() &&
+					 newy + P->height()	<= d->y() + d->height()) ||
+					// Right Top
+					(newx + P->width()	>= d->x() &&
+					 newx + P->width()	<= d->x() + d->width() &&
+					 newy				>= d->y() &&
+					 newy				<= d->y() + d->height()) ||
+					// Right Bottom
+					(newx + P->width()	>= d->x() &&
+					 newx + P->width()	<= d->x() + d->width() &&
+					 newy + P->height()	>= d->y() &&
+					 newy + P->height()	<= d->y() + d->height()))
+			{
+				if (P->y()				< d->y() + d->height() &&
+					P->y() + P->height()> d->y()) { // Left & Right
+					x = false;
+				}
+				else { // Top & Bot
+					y = false;
+				}
+			}
+		}
+	}
+
+	if (x && y)
+		return 1;
+	else if (x && !y)
+		return 2;
+	else if (!x && y)
+		return 3;
+	else
+		return 0;
+}
+WS *MainServer::GetWS()
+{
+	return ws;
+}
 
 // private
-uint MainServer::loadSettings()
+void MainServer::loadSettings()
 {
-	uint port;
 	QString strlog;
-	QString strpcs;
-	QStringList buf;
+	QString strdata;
 
 	fsettings = new QFile("settings.txt");
 	if (fsettings->exists()) {
 		if (fsettings->open(QIODevice::ReadOnly | QIODevice::Text)) {
-			strlog = fsettings->readLine();
-			buf = strlog.split(' ');
+			QTextStream in (fsettings);
 
-			port = buf.at(0).toUInt();
-			strlog = buf.at(1);
-			strpcs = buf.at(2);
+			in >> Serverport >> strlog >> strdata;
 		}
 	}
 	else {
 		if (fsettings->open(QIODevice::WriteOnly | QIODevice::Text)) {
 			QTextStream out (fsettings);
-			out << "32094 log.txt pcs.txt";
+
+			Serverport = 32094;
+			strlog = "log.txt";
+			strdata= "data.txt";
+
+			out << Serverport << "\n" << strlog << "\n" << strdata;
 		}
-		port = 32094;
-		strlog = "log.txt";
-		strpcs = "pcs.txt";
 	}
 
 	flog = new QFile(strlog);
-	fpcs = new QFile(strpcs);
+	fdata= new QFile(strdata);
 	fsettings->close();
-
-	return port;
 }
-void MainServer::loadpcs()
+void MainServer::loadData()
 {
-	if (!fpcs->exists()) {
-		QMessageBox::critical(0, "PC's file error", "File does not exists");
+	if (!fdata->exists()) {
+		qDebug() << "Data file error. File does not exists";
 		return;
 	}
-	if (!fpcs->open(QIODevice::ReadOnly | QIODevice::Text)) {
-		QMessageBox::critical(0, "PC's file error", "Failed read to file");
+	if (!fdata->open(QIODevice::ReadOnly | QIODevice::Text)) {
+		qDebug() << "Data file error. Failed read to file";
 		return;
 	}
 
-	QStringList buf;
-	pcData* dt = new pcData();
-
-	try {
-		while (!fpcs->atEnd()) {
-			buf = ((QString)fpcs->readLine()).split(' ');
-
-			dt->x = buf.at(0).toInt();
-			dt->y = buf.at(1).toInt();
-			dt->MServ = this;
-			dt->Name = buf.at(2);
-			dt->IP = buf.at(3);
-
-			pc* npc = ws->addPc(*dt);
-			pclist->push_back(npc);
-//			connect(npc, SIGNAL(SetChanged(QString, QString, QString)), this, SLOT(SetChanged(QString, QString, QString)));
+	QString name;
+	pcData pdt;
+	depData ddt;
+	QTextStream in (fdata);
+	while (!in.atEnd()) {
+		in >> name;
+		if (name == "1")
+		{
+			in >> ddt;
+			deplist->push_back(new dep(ddt, (QFrame*)ws, this));
+			deplist->last()->unsaved->hide();
+		}
+		else if (name == "2")
+		{
+			in >> pdt;
+			pclist->push_back(new pc(pdt, deplist->last(), this));
+			pclist->last()->unsaved->hide();
+			pclist->last()->Dep = deplist->last();
+		}
+		else if (name == "3")
+		{
+			in >> pdt;
+			pclist->push_back(new pc(pdt, ws, this));
+			pclist->last()->unsaved->hide();
 		}
 	}
-	catch (...) {
-		QMessageBox::critical(0, "PC's file error", "Failed is corrupt, error loading pc's");
-	}
-	fpcs->close();
+	fdata->close();
+}
+void MainServer::resizeEvent(QResizeEvent*)
+{
+	ui->Menu->setGeometry(0, 0, this->width(), 51);
+	ui->Center->move((this->width() - 4) / 2,
+					 (this->height() - 4) / 2);
+	ws->move(ui->Center->x() - 12500,
+			 ui->Center->y() - 12500);
 }
 
 // protected
@@ -194,47 +394,70 @@ void MainServer::slotNewConnection()
 		return;
 	}
 
+	qDebug() << "New connection";
 	for (int i = 0; i < pclist->count(); i++) {
 		qDebug() << "client" << mTcpSocket->peerAddress();
 		qDebug() << "ip: " + pclist->at(i)->GetData()->IP;
 		if (mTcpSocket->peerAddress().toString() == pclist->at(i)->GetData()->IP) {
 			pclist->at(i)->Connect(mTcpSocket);
 
-			return;
+			break;
 		}
 	}
 }
-
 void MainServer::saveFile(bool)
 {
-	if (fpcs->open(QIODevice::WriteOnly | QIODevice::Text)) {
-		QTextStream out (fpcs);
-		pcData* dt;
+	if (fdata->open(QIODevice::WriteOnly | QIODevice::Text)) {
+		QTextStream out (fdata);
 
-		for (int i = 0; i < pclist->count(); i++) {
-			dt = pclist->at(i)->GetData();
-			out << dt->x << ' ' <<
-				   dt->y << ' ' <<
-				   dt->Name << ' ' <<
-				   dt->IP << " \n";
+		for (int j = 0; j < pclist->count(); j++)
+			pclist->at(j)->unsaved->show();
+
+		for (int i = 0; i < deplist->count(); i++) {
+			out << "1\n"
+				<< *(deplist->at(i)->GetData()) << "\n";
+			deplist->at(i)->unsaved->hide();
+
+			for (int j = 0; j < pclist->count(); j++) {
+				if (pclist->at(j)->Dep == deplist->at(i) && pclist->at(j)->unsaved->isVisible())
+				{
+					out << "2\n" << *(pclist->at(j)->GetData()) << "\n";
+					pclist->at(j)->unsaved->hide();
+				}
+			}
 		}
-		fpcs->close();
+		for (int j = 0; j < pclist->count(); j++) {
+			if (pclist->at(j)->unsaved->isVisible())
+			{
+				out << "3\n" << *(pclist->at(j)->GetData()) << "\n";
+				pclist->at(j)->unsaved->hide();
+			}
+		}
+
+		fdata->close();
+
+		logfile("data file update");
+		unsave = false;
 	}
-	logfile("pcs file update");
-	unsave = false;
 }
 void MainServer::menuSettings(bool)
 {
 	if (!winset->isVisible())
 	{
-		winset->setData(mTcpServer->serverAddress().toString(),
-						 mTcpServer->serverPort(),
-						 flog->fileName(),
-						 fpcs->fileName());
+		QString addr;
+		foreach (const QHostAddress &address, QNetworkInterface::allAddresses()) {
+			if (address.protocol() == QAbstractSocket::IPv4Protocol && address != QHostAddress(QHostAddress::LocalHost))
+				 addr = address.toString();
+		}
+
+		winset->setData(addr,
+						mTcpServer->serverPort(),
+						flog->fileName(),
+						fdata->fileName());
 		winset->show();
 	}
 }
-void MainServer::settingsChanged(quint16 port, QString nlf, QString npf)
+void MainServer::settingsChanged(quint16 port, QString nlf, QString ndf)
 {
 	mTcpServer->close();
 	mTcpServer = new QTcpServer(this);
@@ -248,31 +471,80 @@ void MainServer::settingsChanged(quint16 port, QString nlf, QString npf)
 	}
 
 	flog->setFileName(nlf);
-	fpcs->setFileName(npf);
+	fdata->setFileName(ndf);
 
 	if (fsettings->open(QIODevice::WriteOnly | QIODevice::Text)) {
 		QTextStream out (fsettings);
-		out << port << " " << nlf << " " <<npf;
+		out << port << "\n" << nlf << "\n" << ndf;
 		fsettings->close();
 	}
-	logfile("settings changed to: " + QString::number(port) + " " + nlf + " " + npf);
+	logfile("settings changed to: " + QString::number(port) + " " + nlf + " " + ndf);
 }
-void MainServer::newPC(pcData& data)
+void MainServer::newPC(int X, int Y)
 {
-	if (!fpcs->open(QIODevice::Append | QIODevice::Text)) {
-		QMessageBox::critical(0, "PC's error", "Failed append to file");
-		return;
-	}
+	// заставить ввести данные
+	pcData dt;
+	dt.x = X;
+	dt.y = Y;
+	dt.Name = "localhost";
+	dt.IP = "127.0.0.1";
 
-	QTextStream out(fpcs);
-	out << data.x << ' '<<
-		   data.y << ' ' <<
-		   data.Name << ' ' <<
-		   data.IP << " \n";
-	fpcs->close();
-
-	pc* npc = ws->addPc(data);
-	pclist->push_back(npc);
-//	connect(npc, SIGNAL(SetChanged(QString,QString)), this, SLOT(SetChanged(QString, QString)));
+	pclist->push_back(new pc(dt, ws, this));
+	pclist->last()->lower();
+	AddPc(false);
 	unsave = true;
+}
+void MainServer::newDep(int x, int y)
+{
+	// заставить ввести данные
+	depData dt;
+	dt.x = x;
+	dt.y = y;
+	dt.Name = "New dep";
+	dt.width = 350;
+	dt.heigth = 350;
+
+	deplist->push_back(new dep(dt, (QFrame*)ws, this));
+	deplist->last()->raise();
+	AddDep(false);
+	unsave = true;
+}
+void MainServer::AddPc(bool state)
+{
+	if (state)
+	{
+		ui->AddPC->setChecked(state);
+		ui->AddDep->setEnabled(!state);
+		ws->toggleAddPC(state);
+	}
+	else
+	{
+		ui->AddPC->setChecked(state);
+		ui->AddDep->setEnabled(!state);
+		ws->toggleAddPC(state);
+	}
+}
+void MainServer::AddDep(bool state)
+{
+	if (state)
+	{
+		ui->AddDep->setChecked(state);
+		ui->AddPC->setEnabled(!state);
+		ws->toggleAddDep(state);
+	}
+	else
+	{
+		ui->AddDep->setChecked(state);
+		ui->AddPC->setEnabled(!state);
+		ws->toggleAddDep(state);
+	}
+}
+void MainServer::GoHome(bool)
+{
+	ui->Center->move((this->width() - 4) / 2,
+					 (this->height() - 4) / 2);
+	ws->move(ui->Center->x() - 12500,
+			 ui->Center->y() - 12500);
+
+	ui->HomeButton->hide();
 }

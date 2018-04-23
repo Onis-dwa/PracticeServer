@@ -5,4 +5,14 @@
         <file>pc logo/PC_OFF.png</file>
         <file>pc logo/PC_ON.png</file>
     </qresource>
+    <qresource prefix="/res">
+        <file>resources/sota.png</file>
+        <file>resources/Save.png</file>
+        <file>resources/Setting.png</file>
+        <file>resources/AddPC.png</file>
+        <file>resources/Center.png</file>
+        <file>resources/AddDep.png</file>
+        <file>resources/home.png</file>
+        <file>resources/Unsaved.png</file>
+    </qresource>
 </RCC>

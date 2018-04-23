@@ -38,19 +38,24 @@ SOURCES += \
     pc.cpp \
     ws.cpp \
     settings.cpp \
-    pcset.cpp
+    pcset.cpp \
+    dep.cpp \
+    pcview.cpp
 
 HEADERS += \
 		mainserver.h \
     pc.h \
     ws.h \
     settings.h \
-    pcset.h
+    pcset.h \
+    dep.h \
+    pcview.h
 
 FORMS += \
         mainserver.ui \
     settings.ui \
-    pcset.ui
+    pcset.ui \
+    pcview.ui
 
 RESOURCES += \
     resources.qrc
