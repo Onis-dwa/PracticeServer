@@ -3,6 +3,7 @@
 
 #include "pcset.h"
 #include "pc.h"
+#include "graph.h"
 
 #include <QDialog>
 
@@ -23,15 +24,28 @@ public:
 	void setData(staticInfo stI);
 	void setData(dynamicInfo dnI);
 
+    void setrand(QString rnd);
+
 private:
 	Ui::pcview *ui;
-	PcSet* set;
+    PcSet* set;
+
+    Graph* cpu;
+    Graph* gpu;
+    Graph* ram;
+
+protected:
+    virtual void closeEvent(QCloseEvent *event);
+    virtual void mouseMoveEvent(QMouseEvent*);
+    virtual void resizeEvent(QResizeEvent*);
 
 signals:
+    void RemoteRun(bool);
 	void PcSetChanged(QString, QString);
 
 public slots:
 	void ShowSettings(bool);
+    void hideall(bool);
 };
 
 #endif // PCVIEW_H

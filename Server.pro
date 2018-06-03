@@ -40,7 +40,8 @@ SOURCES += \
     settings.cpp \
     pcset.cpp \
     dep.cpp \
-    pcview.cpp
+    pcview.cpp \
+    graph.cpp
 
 HEADERS += \
 		mainserver.h \
@@ -49,7 +50,8 @@ HEADERS += \
     settings.h \
     pcset.h \
     dep.h \
-    pcview.h
+    pcview.h \
+    graph.h
 
 FORMS += \
         mainserver.ui \

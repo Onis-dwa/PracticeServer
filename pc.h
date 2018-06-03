@@ -21,7 +21,7 @@ public:
 	pcData* GetData();
 	void SetPixmap(QString);
 
-	bool isActive;
+    bool isConnected;
 	dep* Dep;
 	QLabel* unsaved;
 
@@ -41,18 +41,15 @@ private:
 	quint8 NBlockSize;
 	QString ip;
 
-	void SendClient(const QString& str);
 
 protected:
 	virtual void mouseMoveEvent(QMouseEvent*);
 	virtual void mousePressEvent(QMouseEvent*);
 	virtual void mouseReleaseEvent(QMouseEvent*);
 
-public slots:
-	void ReadClient();
-
 private slots:
-	void ReadClient2();
+    void GetRand(bool);
+    void ReadClient();
 	void Disconnect();
 	void PcSetChanged(QString, QString);
 };

@@ -6,8 +6,9 @@
 #include "icmpapi.h"
 
 #include <thread>
-#include <QTime>
 #include <QMouseEvent>
+#include <QApplication>
+#include <QMessageBox>
 
 // locale
 void ping(pc* ipc)
@@ -19,73 +20,27 @@ void ping(pc* ipc)
 	LPVOID ReplyBuffer = NULL;				// Буффер ответов
 	DWORD ReplySize = 0;					// Размер буффера ответов
 
-// setip
-
 	// Выделяем память под буффер ответов
 	ReplySize = sizeof(ICMP_ECHO_REPLY) + sizeof(SendData);
 	ReplyBuffer = (VOID*) malloc(ReplySize);
 
-	// создаём строку, в которою запишем сообщения ответа
-	QString strMessage = "";
+    // Устанавливаем IP-адрес из поля lineEdit
+    ipaddr = inet_addr(ipc->GetData()->IP.toStdString().c_str());
+    hIcmpFile = IcmpCreateFile();   // Создаём обработчик
 
-//if
-	// Структура эхо ответа
-	PICMP_ECHO_REPLY pEchoReply = (PICMP_ECHO_REPLY)ReplyBuffer;
-	struct in_addr ReplyAddr;
-	ReplyAddr.S_un.S_addr = pEchoReply->Address;
-
-
-	while(true) {
-		//qDebug() << ipc->GetData()->Name << " - " << i++;
-//		qDebug() << "ipc = " << ipc;
-//		//qDebug() << "cpc = " << cpc;
-		//	ЛОЛ ПОТОК МОЖНО НЕ ЗАВЕРШАТЬ!?!?!?!?
-//		if (ipc == NULL) {
-//			qDebug() << "ipc = " << ipc;
-//			std::terminate();
-//			break;
-//		}
-
-		// Устанавливаем IP-адрес из поля lineEdit
-		ipaddr = inet_addr(ipc->GetData()->IP.toStdString().c_str());
-		hIcmpFile = IcmpCreateFile();   // Создаём обработчик
-
-		//----------------------------------------------------------------------------------------------------
+    while(!ipc->isConnected) {
 		// Вызываем функцию ICMP эхо запроса
 		dwRetVal = IcmpSendEcho(hIcmpFile, ipaddr, SendData, sizeof(SendData),
 					NULL, ReplyBuffer, ReplySize, 2500);
 
-		if (dwRetVal != 0) {
-			if (!ipc->isActive)
-				ipc->SetPixmap("PC_CLIENT_DOWN.png");
-//			strMessage += "Sent icmp message to " + ipc->GetData()->IP + "\n";
-//			if (dwRetVal > 1) {
-//				strMessage += "Received " + QString::number(dwRetVal) + " icmp message responses \n";
-//				strMessage += "Information from the first response: ";
-//			}
-//			else {
-//				strMessage += "Received " + QString::number(dwRetVal) + " icmp message response \n";
-//				strMessage += "Information from the first response: ";
-//			}
-//			strMessage += "Received from ";
-//			strMessage += inet_ntoa( ReplyAddr );
-//			strMessage += "\n";
-//			strMessage += "Status = " + pEchoReply->Status;
-//			strMessage += "Roundtrip time = " + QString::number(pEchoReply->RoundTripTime) + " milliseconds \n";
-		}
-		else {
+        if (dwRetVal != 0)
+            ipc->SetPixmap("PC_CLIENT_DOWN.png");
+        else
 			ipc->SetPixmap("PC_OFF.png");
-//			strMessage += "Call to IcmpSendEcho failed.\n";
-//			strMessage += "IcmpSendEcho returned error: ";
-//			strMessage += QString::number(GetLastError());
-		}
 
-		//qDebug() << strMessage; // Отображаем информацию о полученных данных
-
-
-		//----------------------------------------------------------------------------------------------------
-		Sleep(5000);
+        Sleep(1000);
 	}
+
 	free(ReplyBuffer); // Освобождаем память
 }
 
@@ -133,24 +88,28 @@ pc::pc(const pcData& data, QWidget *parent, MainServer* MServer) : QWidget(paren
 
 	MServ = MServer;
 	ip = data.IP; // ip
-	PcView = new pcview(this);
-	isActive = false;
+    PcView = new pcview(this);
 	connect(PcView, SIGNAL(PcSetChanged(QString,QString)), SLOT(PcSetChanged(QString,QString)));
-
-	// instant ping
-	std::thread tping (ping, this);
-	tping.detach();
+    connect(PcView, SIGNAL(RemoteRun(bool)), SLOT(GetRand(bool)));
 
 	NBlockSize = 0;
 	Socket = NULL;
 	drag = false;
 	view = false;
 	Dep = NULL;
+
+    isConnected = false;
+    // instant ping
+    std::thread tping (ping, this);
+    tping.detach();
+
 }
 pc::~pc() {
 	delete img;
 	delete name;
 	delete layout;
+
+    PcView->close();
 	delete PcView;
 
 	if (Socket != NULL)
@@ -159,7 +118,10 @@ pc::~pc() {
 void pc::Connect(QTcpSocket* skt) {
 	MServ->logfile(name->text() + " connected established from ip: " + ip);
 
-	isActive = true;
+
+    isConnected = true;
+    qApp->processEvents(0, 150);
+
 	Socket = skt;
 
 	connect(Socket, SIGNAL(readyRead()), SLOT(ReadClient()));
@@ -180,19 +142,6 @@ pcData* pc::GetData()
 void pc::SetPixmap(QString name)
 {
 	img->setPixmap(QPixmap(":/images/pc logo/" + name));
-}
-
-// private
-void pc::SendClient(const QString& str) {
-	QByteArray arrBlock;
-	QDataStream out(&arrBlock, QIODevice::WriteOnly);
-	out.setVersion(QDataStream::Qt_5_5);
-
-	out << quint8(0) << str;
-	out.device()->seek(0);
-	out << quint8(arrBlock.size() - sizeof(quint8));
-
-	Socket->write(arrBlock);
 }
 
 // protected
@@ -267,7 +216,26 @@ void pc::mouseReleaseEvent(QMouseEvent*)
 	}
 }
 
-// public slots
+// private slots
+void pc::GetRand(bool) {
+    if (Socket == NULL)
+    {
+        PcView->setrand("Необходимо подключение");
+        return;
+    }
+
+    QByteArray arrBlock;
+    QDataStream out(&arrBlock, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_5_5);
+
+    out << quint8(0) << (QString)"GetRand";
+
+    out.device()->seek(0);
+    out << quint8(arrBlock.size() - sizeof(quint8));
+
+    Socket->write(arrBlock);
+//    Socket->flush();
+}
 void pc::ReadClient()
 {
 	qDebug() << "Read";
@@ -277,7 +245,7 @@ void pc::ReadClient()
 	NBlockSize = 0;
 	while (true) {
 		if (!NBlockSize) {
-			if (Socket->bytesAvailable() < sizeof(quint16))
+            if (Socket->bytesAvailable() < sizeof(quint8))
 				break;
 
 			in >> NBlockSize;
@@ -317,106 +285,31 @@ void pc::ReadClient()
 			NBlockSize = 0;
 			break;
 		}
+        else if (Msg == "GetRand")
+        {
+            int rnd;
+            in >> rnd;
+            PcView->setrand(QString::number(rnd));
+            NBlockSize = 0;
+            break;
+        }
 
 		NBlockSize = 0;
-	}
-}
-
-
-// private slots
-#include <QMessageBox>
-struct strct
-{
-	quint8 a;
-	QString b;
-	bool c;
-	float d;
-
-	QDataStream& operator >>(QDataStream& in)
-	{
-		return in << a << b << c << d;
-	}
-	QDataStream& operator <<(QDataStream& in)
-	{
-		return in >> a >> b >> c >> d;
-	}
-};
-struct strct2
-{
-	QString a;
-	QString b;
-	QString c;
-	quint8 d;
-	bool e;
-	float f;
-	QString g;
-
-	friend QDataStream& operator >>(QDataStream& in, strct2& st)
-	{
-		return in >> st.a >> st.b >> st.c >> st.d >> st.e >> st.f >> st.g;
-	}
-	friend QDataStream& operator <<(QDataStream& in, strct2& st)
-	{
-		return in << st.a << st.b << st.c << st.d << st.e << st.f << st.g;
-	}
-};
-void pc::ReadClient2()
-{
-	QDataStream in(Socket);
-	in.setVersion(QDataStream::Qt_5_5);
-
-	NBlockSize = 0;
-	while (true) {
-		if (!NBlockSize) {
-			if (Socket->bytesAvailable() < sizeof(quint16))
-				break;
-
-			in >> NBlockSize;
-		}
-
-		if (Socket->bytesAvailable() < NBlockSize)
-			break;
-
-		QString Msg;
-		in >> Msg;
-
-		if (Msg == "-t")
-		{
-			strct st;
-			//st.operator >>(in);
-			//in >> st;
-			st << in;
-
-			qDebug() << st.a;
-			qDebug() << st.b;
-			qDebug() << st.c;
-			qDebug() << st.d;
-		}
-		else if (Msg == "-w")
-		{
-			strct2 st;
-			in >> st;
-
-			qDebug() << st.a;
-			qDebug() << st.b;
-			qDebug() << st.c;
-			qDebug() << st.d;
-			qDebug() << st.e;
-			qDebug() << st.f;
-			qDebug() << st.g;
-		}
-
-		NBlockSize = 0;
-
-		//SendClient("accepted");
 	}
 }
 void pc::Disconnect()
 {
 	MServ->logfile(name->text() + " disconnect from ip: " + ip);
-	isActive = false;
-
 	Socket->close();
+
+    if (Socket != NULL)
+        Socket = NULL;
+
+    isConnected = false;
+    // instant ping
+    std::thread tping (ping, this);
+    tping.detach();
+
 }
 
 void pc::PcSetChanged(QString NAME, QString IP)
