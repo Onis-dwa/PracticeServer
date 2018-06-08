@@ -15,6 +15,7 @@ class WS;
 class dep;
 class pc;
 class Settings;
+class PcSet;
 class MainServer : public QMainWindow
 {
 	Q_OBJECT
@@ -29,6 +30,8 @@ public:
 	int tryMove(pc* obj, int& newx, int& newy);
 	int tryDepMove(dep* obj, int& newx, int& newy);
 	WS* GetWS();
+    bool ExistName(QString& name);
+    bool ExistIP(QString& ip);
 
 	bool unsave;
 
@@ -43,6 +46,7 @@ private:
 	WS* ws;
 	QList<pc*>* pclist;
 	QList<dep*>* deplist;
+    PcSet* pcs;
 
 	QFile* flog;
 	QFile* fsettings;
@@ -63,8 +67,12 @@ public slots:
 	void settingsChanged(quint16, QString, QString);
 	void newPC(int x, int y);
 	void newDep(int x, int y);
+    void acceptPC();
+    void rejectPC();
+    void RemovePC(pc*);
 	void AddPc(bool);
 	void AddDep(bool);
+    void RemovePC(bool);
 	void GoHome(bool);
 };
 

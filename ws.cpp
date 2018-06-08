@@ -46,6 +46,7 @@ void WS::toggleAddDep(bool state)
 	}
 }
 
+
 // protected
 void WS::mousePressEvent(QMouseEvent* m)
 {

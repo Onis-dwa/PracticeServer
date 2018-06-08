@@ -16,10 +16,15 @@ public:
     void rs(int w, int h);
     bool spectrate;
 
+    int min;
+    int max;
+    int avg;
+
 private:
     int* values;
     int arrsize;
     int last;
+    long value;
     long count;
     int x;
     int y;

@@ -17,7 +17,7 @@ class pcview : public QDialog
 	Q_OBJECT
 
 public:
-	explicit pcview(QWidget *parent = 0);
+    explicit pcview(const QString& name, QWidget *parent = 0);
 	~pcview();
 
 	void setData(const QString& name, const QString& ip);
@@ -25,6 +25,8 @@ public:
 	void setData(dynamicInfo dnI);
 
     void setrand(QString rnd);
+    QString GetStatic();
+    QString GetDynaminc();
 
 private:
 	Ui::pcview *ui;
@@ -41,6 +43,7 @@ protected:
 
 signals:
     void RemoteRun(bool);
+    void HeadChanged();
 	void PcSetChanged(QString, QString);
 
 public slots:

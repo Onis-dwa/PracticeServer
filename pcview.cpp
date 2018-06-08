@@ -2,11 +2,12 @@
 #include "ui_pcview.h"
 
 // public
-pcview::pcview(QWidget *parent) :
+pcview::pcview(const QString& name, QWidget *parent) :
 	QDialog(parent),
 	ui(new Ui::pcview)
 {
 	ui->setupUi(this);
+    this->setWindowTitle(name);
 	set = new PcSet(this);
 
 	connect(set, SIGNAL(PcSetChanged(QString,QString)), SIGNAL(PcSetChanged(QString,QString)));
@@ -20,14 +21,7 @@ pcview::pcview(QWidget *parent) :
 }
 pcview::~pcview()
 {
-    set->close();
-	delete set;
-
-    delete cpu;
-    delete gpu;
-    delete ram;
-
-	delete ui;
+    delete ui;
 }
 void pcview::setData(const QString &name, const QString &ip)
 {
@@ -35,6 +29,15 @@ void pcview::setData(const QString &name, const QString &ip)
 }
 void pcview::setData(staticInfo stI)
 {
+    if ((ui->PCName->text() != "unnown" && ui->PCName->text() != stI.PCName) ||
+        (ui->OS->text() != "unnown" && ui->OS->text() != stI.OS) ||
+        (ui->Bit->text() != "unnown" && ui->Bit->text() != stI.Bit) ||
+        (ui->CPU->text() != "unnown" && ui->CPU->text() != stI.CPU) ||
+        (ui->GPU->text() != "unnown" && ui->GPU->text() != stI.GPU) ||
+        (ui->RAM->text() != "unnown" && ui->RAM->text() != stI.RAM))
+        emit HeadChanged();
+
+
 	ui->PCName->setText(stI.PCName);
 	ui->OS->setText(stI.OS);
 	ui->Bit->setText(stI.Bit);
@@ -55,7 +58,6 @@ void pcview::setData(dynamicInfo dnI)
     gpu->AddValue(dnI.GPU);
     ram->AddValue(dnI.RAM);
 }
-
 void pcview::setrand(QString rnd)
 {
     if (rnd == "Необходимо подключение")
@@ -63,17 +65,43 @@ void pcview::setrand(QString rnd)
     else
         ui->lremoterun->setText(" Возвращено " + rnd);
 }
+QString pcview::GetStatic()
+{
+    return "	" +
+            ui->PCName->text() + "\n	" +
+            ui->OS->text() + "\n	" +
+            ui->Bit->text() + "\n	" +
+            ui->CPU->text() + "\n	" +
+            ui->GPU->text() + "\n	" +
+            ui->RAM->text() + "\n";
+}
+QString pcview::GetDynaminc()
+{
+    return "	CPU:	Min: " +
+                             QString::number(cpu->min) +
+           "%\n		Max: " + QString::number(cpu->max) +
+           "%\n		Avg: " + QString::number(cpu->avg) +
 
-void pcview::closeEvent(QCloseEvent *event)
+           "%\n	GPU:	Min: " +
+                             QString::number(gpu->min) +
+           "%\n		Max: " + QString::number(gpu->max) +
+           "%\n		Avg: " + QString::number(gpu->avg) +
+
+           "%\n	RAM:	Min: " +
+                             QString::number(ram->min) +
+           "%\n		Max: " + QString::number(ram->max) +
+           "%\n		Avg: " + QString::number(ram->avg) + "%";
+}
+
+// protected
+void pcview::closeEvent(QCloseEvent *)
 {
     set->hide();
 }
-
 void pcview::mouseMoveEvent(QMouseEvent *)
 {
 
 }
-
 void pcview::resizeEvent(QResizeEvent *e)
 {
     int w = e->size().width() - 95;
@@ -89,7 +117,6 @@ void pcview::ShowSettings(bool)
 	if (!set->isVisible())
         set->show();
 }
-
 void pcview::hideall(bool)
 {
     set->hide();

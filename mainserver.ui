@@ -6,14 +6,14 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>400</width>
-    <height>400</height>
+    <width>521</width>
+    <height>521</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
-    <width>400</width>
-    <height>400</height>
+    <width>521</width>
+    <height>521</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -28,8 +28,8 @@
      <rect>
       <x>0</x>
       <y>0</y>
-      <width>400</width>
-      <height>51</height>
+      <width>521</width>
+      <height>61</height>
      </rect>
     </property>
     <property name="palette">
@@ -115,19 +115,6 @@
      <property name="spacing">
       <number>0</number>
      </property>
-     <item row="1" column="6">
-      <spacer name="BottomSpacer">
-       <property name="orientation">
-        <enum>Qt::Vertical</enum>
-       </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>20</width>
-         <height>40</height>
-        </size>
-       </property>
-      </spacer>
-     </item>
      <item row="0" column="5">
       <spacer name="horizontalSpacer">
        <property name="orientation">
@@ -143,39 +130,6 @@
         </size>
        </property>
       </spacer>
-     </item>
-     <item row="2" column="1" colspan="9">
-      <widget class="Line" name="BottomLine">
-       <property name="frameShadow">
-        <enum>QFrame::Plain</enum>
-       </property>
-       <property name="lineWidth">
-        <number>1</number>
-       </property>
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
-       </property>
-      </widget>
-     </item>
-     <item row="0" column="8">
-      <widget class="QPushButton" name="SettingsButon">
-       <property name="text">
-        <string/>
-       </property>
-       <property name="icon">
-        <iconset resource="resources.qrc">
-         <normaloff>:/res/resources/Setting.png</normaloff>:/res/resources/Setting.png</iconset>
-       </property>
-       <property name="iconSize">
-        <size>
-         <width>32</width>
-         <height>32</height>
-        </size>
-       </property>
-       <property name="flat">
-        <bool>true</bool>
-       </property>
-      </widget>
      </item>
      <item row="0" column="3">
       <spacer name="FirstSpacer">
@@ -193,7 +147,27 @@
        </property>
       </spacer>
      </item>
-     <item row="0" column="7">
+     <item row="0" column="10">
+      <widget class="QPushButton" name="SettingsButon">
+       <property name="text">
+        <string/>
+       </property>
+       <property name="icon">
+        <iconset resource="resources.qrc">
+         <normaloff>:/res/resources/Setting.png</normaloff>:/res/resources/Setting.png</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>48</width>
+         <height>48</height>
+        </size>
+       </property>
+       <property name="flat">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="9">
       <spacer name="SecondSpacer">
        <property name="orientation">
         <enum>Qt::Horizontal</enum>
@@ -217,12 +191,25 @@
        </property>
        <property name="iconSize">
         <size>
-         <width>32</width>
-         <height>32</height>
+         <width>48</width>
+         <height>48</height>
         </size>
        </property>
        <property name="flat">
         <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="1" colspan="11">
+      <widget class="Line" name="BottomLine">
+       <property name="frameShadow">
+        <enum>QFrame::Plain</enum>
+       </property>
+       <property name="lineWidth">
+        <number>1</number>
+       </property>
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
        </property>
       </widget>
      </item>
@@ -240,8 +227,8 @@
        </property>
        <property name="iconSize">
         <size>
-         <width>49</width>
-         <height>32</height>
+         <width>73</width>
+         <height>48</height>
         </size>
        </property>
        <property name="checkable">
@@ -266,8 +253,8 @@
        </property>
        <property name="iconSize">
         <size>
-         <width>32</width>
-         <height>32</height>
+         <width>48</width>
+         <height>48</height>
         </size>
        </property>
        <property name="checkable">
@@ -278,6 +265,64 @@
        </property>
       </widget>
      </item>
+     <item row="0" column="8">
+      <widget class="QPushButton" name="RemovePC">
+       <property name="text">
+        <string/>
+       </property>
+       <property name="icon">
+        <iconset resource="resources.qrc">
+         <normaloff>:/res/resources/Remove.png</normaloff>:/res/resources/Remove.png</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>48</width>
+         <height>48</height>
+        </size>
+       </property>
+       <property name="checkable">
+        <bool>true</bool>
+       </property>
+       <property name="checked">
+        <bool>false</bool>
+       </property>
+       <property name="autoRepeat">
+        <bool>false</bool>
+       </property>
+       <property name="flat">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="7">
+      <spacer name="horizontalSpacer_2">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeType">
+        <enum>QSizePolicy::Fixed</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>10</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item row="2" column="1" colspan="10">
+      <spacer name="BottomSpacer">
+       <property name="orientation">
+        <enum>Qt::Vertical</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>20</width>
+         <height>40</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
     </layout>
    </widget>
    <widget class="QPushButton" name="HomeButton">
@@ -287,9 +332,9 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>61</y>
-      <width>32</width>
-      <height>32</height>
+      <y>70</y>
+      <width>48</width>
+      <height>48</height>
      </rect>
     </property>
     <property name="toolTip">
@@ -304,8 +349,8 @@
     </property>
     <property name="iconSize">
      <size>
-      <width>32</width>
-      <height>32</height>
+      <width>48</width>
+      <height>48</height>
      </size>
     </property>
     <property name="flat">

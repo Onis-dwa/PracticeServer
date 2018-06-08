@@ -9,7 +9,7 @@ dep::dep(depData& data, QFrame *parent, MainServer* MServer) : QFrame(parent)
 	QPalette back;
 	back.setBrush(QPalette::Background, grayA);
 	this->setAutoFillBackground(true);
-	this->setPalette(back);
+    this->setPalette(back);
 	this->setFrameShape(Shape::Box);
 	this->setFrameShadow(Shadow::Plain);
 	this->setLineWidth(2);
@@ -33,6 +33,7 @@ dep::dep(depData& data, QFrame *parent, MainServer* MServer) : QFrame(parent)
 	name->setAlignment(Qt::AlignHCenter);
 	name->setGeometry(BorderSize, BorderSize, this->width() - (BorderSize << 1), 21);
 	name->setText(data.Name);
+    name->setFont(QFont("MS Shell Dlg 2", 11));
 
 	unsaved = new QLabel(this);
 	unsaved->setPixmap(QPixmap(":/res/resources/Unsaved.png"));

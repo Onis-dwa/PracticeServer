@@ -7,6 +7,7 @@
 #include <QWidget>
 #include <QLabel>
 #include <QVBoxLayout>
+#include <QTime>
 
 class dep;
 class pcview;
@@ -20,10 +21,14 @@ public:
 	void Connect(QTcpSocket* skt);
 	pcData* GetData();
 	void SetPixmap(QString);
+    void Remove(bool);
+    void RunPing();
+    void Rename();
 
     bool isConnected;
+    bool remove;
 	dep* Dep;
-	QLabel* unsaved;
+    QLabel* unsaved;
 
 private:
 	QLabel* img;
@@ -39,8 +44,18 @@ private:
 	int DragX;
 	int DragY;
 	quint8 NBlockSize;
-	QString ip;
+    QString ip;
 
+    QTime timer;
+    bool headerchanged;
+    bool unsaved_data;
+    bool bload;
+    bool rename;
+
+    void Load();
+    void Save();
+    QString ParseTime();
+    QString oldname;
 
 protected:
 	virtual void mouseMoveEvent(QMouseEvent*);
@@ -50,8 +65,10 @@ protected:
 private slots:
     void GetRand(bool);
     void ReadClient();
-	void Disconnect();
+    void Disconnect();
+    void PcDataSet(QString,QString);
 	void PcSetChanged(QString, QString);
+    void HeadChanged();
 };
 struct staticInfo
 {
@@ -62,7 +79,17 @@ struct staticInfo
 	QString GPU;
 	QString RAM;
 
+    friend inline QTextStream& operator >>(QTextStream& t, staticInfo& p)
+    {
+        p.PCName = t.readLine().replace("	", "");
+        p.OS = t.readLine().replace("	", "");
+        p.Bit = t.readLine().replace("	", "");
+        p.CPU = t.readLine().replace("	", "");
+        p.GPU = t.readLine().replace("	", "");
+        p.RAM = t.readLine().replace("	", "");
 
+        return t;
+    }
 	friend inline QDataStream& operator >>(QDataStream& t, staticInfo& p)
 	{
 		return t >> p.PCName >> p.OS >> p.Bit >> p.CPU >> p.GPU >> p.RAM;

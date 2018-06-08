@@ -32,14 +32,16 @@ Graph::Graph(int x, int y, int w, int h, QLabel* l, QString n, QWidget *parent) 
 
     percent = (double)h / 100.0;
     spectrate = false;
+
     count = 0;
+    min = 101;
+    max = -1;
+    avg = 0;
+    value = 0;
 }
 Graph::~Graph()
 {
-    delete values;
-    delete out;
-    delete graph;
-    delete paint;
+
 }
 void Graph::AddValue(int val)
 {
@@ -48,6 +50,15 @@ void Graph::AddValue(int val)
 
     values[last] = val;
     count++;
+
+    if (val > max)
+        max = val;
+    if (val < min)
+        min = val;
+
+    value += val;
+    avg = value / count;
+
     x = out->width();
     y = out->height();
 

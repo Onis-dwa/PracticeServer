@@ -7,6 +7,7 @@ PcSet::PcSet(QWidget *parent) :
 	ui(new Ui::PcSet)
 {
 	ui->setupUi(this);
+    this->setWindowTitle("Настройка ПК");
 
 	connect(ui->act, SIGNAL(accepted()), SLOT(accepted()));
 

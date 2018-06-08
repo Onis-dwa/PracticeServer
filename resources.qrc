@@ -14,5 +14,6 @@
         <file>resources/AddDep.png</file>
         <file>resources/home.png</file>
         <file>resources/Unsaved.png</file>
+        <file>resources/Remove.png</file>
     </qresource>
 </RCC>

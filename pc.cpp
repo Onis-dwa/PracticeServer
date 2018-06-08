@@ -9,6 +9,8 @@
 #include <QMouseEvent>
 #include <QApplication>
 #include <QMessageBox>
+#include <QFile>
+#include <QDir>
 
 // locale
 void ping(pc* ipc)
@@ -28,7 +30,9 @@ void ping(pc* ipc)
     ipaddr = inet_addr(ipc->GetData()->IP.toStdString().c_str());
     hIcmpFile = IcmpCreateFile();   // Создаём обработчик
 
-    while(!ipc->isConnected) {
+    QString ip = ipc->GetData()->IP;
+
+    while(!ipc->isConnected || ip != ipc->GetData()->IP) {
 		// Вызываем функцию ICMP эхо запроса
 		dwRetVal = IcmpSendEcho(hIcmpFile, ipaddr, SendData, sizeof(SendData),
 					NULL, ReplyBuffer, ReplySize, 2500);
@@ -54,20 +58,20 @@ pc::pc(const pcData& data, QWidget *parent, MainServer* MServer) : QWidget(paren
 	img = new QLabel(this);
 	img->setPixmap(QPixmap(":/images/pc logo/PC.png"));
 	img->setScaledContents(true);
-	img->setMinimumHeight(48);
-	img->setMaximumHeight(48);
-	img->setMinimumWidth(48);
-	img->setMaximumWidth(48);
+    img->setMinimumHeight(64);
+    img->setMaximumHeight(64);
+    img->setMinimumWidth(64);
+    img->setMaximumWidth(64);
 
 	name = new QLabel(this);
 	name->setText(data.Name); // name
 	name->setWordWrap(true);
-	name->setAlignment(Qt::AlignHCenter);
-	name->setAlignment(Qt::AlignTop);
-	name->setMinimumHeight(16);
-	name->setMaximumHeight(48);
-	name->setMinimumWidth(48);
-	name->setMaximumWidth(48);
+    name->setFont(QFont("MS Shell Dlg 2", 11));
+    name->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
+    name->setMinimumHeight(16);
+    name->setMaximumHeight(48);
+    name->setMinimumWidth(64);
+    name->setMaximumWidth(64);
 
 	QPalette palette;
 	palette.setColor(QPalette::Window, Qt::white);
@@ -81,39 +85,55 @@ pc::pc(const pcData& data, QWidget *parent, MainServer* MServer) : QWidget(paren
 	layout->setSpacing(5);
 
 	this->setLayout(layout);
-	this->setGeometry(data.x, data.y, 48, 69); // x,y
+    this->setGeometry(data.x, data.y, 64, 85); // x,y
 	unsaved->raise();
-	unsaved->setGeometry(0, 30, 16, 16);
+    unsaved->setGeometry(10, 10, 16, 16);
 	this->show();
 
 	MServ = MServer;
 	ip = data.IP; // ip
-    PcView = new pcview(this);
+    PcView = new pcview(data.Name, this);
 	connect(PcView, SIGNAL(PcSetChanged(QString,QString)), SLOT(PcSetChanged(QString,QString)));
     connect(PcView, SIGNAL(RemoteRun(bool)), SLOT(GetRand(bool)));
+    connect(PcView, SIGNAL(HeadChanged()), SLOT(HeadChanged()));
 
 	NBlockSize = 0;
 	Socket = NULL;
 	drag = false;
 	view = false;
 	Dep = NULL;
-
-    isConnected = false;
-    // instant ping
-    std::thread tping (ping, this);
-    tping.detach();
-
+    remove = false;
+    headerchanged = false;
+    unsaved_data = false;
+    bload = false;
+    rename = false;
 }
 pc::~pc() {
+    Save();
+    return;
+
+    qDebug() << "pc delete unsaved";
+    delete unsaved;
+    qDebug() << "pc delete img";
 	delete img;
+    qDebug() << "pc delete name";
 	delete name;
+    qDebug() << "pc delete layout";
 	delete layout;
 
+    qDebug() << "pc delete PcView";
     PcView->close();
 	delete PcView;
 
+    Dep = NULL;
+    MServ = NULL;
 	if (Socket != NULL)
-		delete Socket;
+    {
+        qDebug() << "pc close Socket";
+        Socket->disconnectFromHost();
+        qDebug() << "pc delete Socket";
+        Socket = NULL;
+    }
 }
 void pc::Connect(QTcpSocket* skt) {
 	MServ->logfile(name->text() + " connected established from ip: " + ip);
@@ -128,6 +148,9 @@ void pc::Connect(QTcpSocket* skt) {
 	connect(Socket, SIGNAL(disconnected()), SLOT(Disconnect()));
 
 	SetPixmap("PC_ON.png");
+
+    timer.start();
+    unsaved_data = true;
 }
 pcData* pc::GetData()
 {
@@ -141,7 +164,165 @@ pcData* pc::GetData()
 }
 void pc::SetPixmap(QString name)
 {
-	img->setPixmap(QPixmap(":/images/pc logo/" + name));
+    img->setPixmap(QPixmap(":/images/pc logo/" + name));
+}
+void pc::Remove(bool state)
+{
+    if (state)
+    {
+        remove = true;
+        this->setCursor(QCursor(Qt::CrossCursor));
+    }
+    else
+    {
+        remove = false;
+        this->setCursor(QCursor(Qt::ArrowCursor));
+    }
+}
+void pc::RunPing()
+{
+    Load();
+
+    isConnected = false;
+    // instant ping
+    std::thread tping (ping, this);
+    tping.detach();
+}
+void pc::Rename()
+{
+    if (rename)
+    {
+        QFile* fdata;
+        fdata = new QFile(QApplication::applicationDirPath() + "/PCData/" + oldname + ".txt");
+
+        fdata->rename(name->text());
+    }
+}
+
+// private
+void pc::Load()
+{
+    if (bload)
+        return;
+    QFile* fdata;
+    fdata = new QFile(QApplication::applicationDirPath() + "/PCData/" + name->text() + ".txt");
+    if (!fdata->exists()) {
+        qDebug() << "Data file error. " + name->text() + " file does not exists";
+        return;
+    }
+    if (!fdata->open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qDebug() << "Data file error. " + name->text() + " failed read to file";
+        return;
+    }
+
+    quint64 pos = 0;
+    QString str;
+
+    QTextStream in(fdata);
+    while(!in.atEnd())
+    {
+        str = in.readLine();
+        if (str == "PC config changed!" || str == "PC config:")
+        {
+            pos = in.pos();
+        }
+    }
+
+    staticInfo st;
+    if (pos != 0)
+    {
+        in.seek(pos);
+
+        in >> st;
+        PcView->setData(st);
+    }
+    bload = true;
+}
+void pc::Save()
+{
+    if (!unsaved_data)
+        return;
+
+    QDir dr(QApplication::applicationDirPath());
+    if (!dr.exists("PCData"))
+        dr.mkdir("PCData");
+
+    QFile* fdata;
+    fdata = new QFile(QApplication::applicationDirPath() + "/PCData/" + name->text() + ".txt");
+
+    if (fdata->exists()) {
+        if (fdata->open(QIODevice::Append | QIODevice::Text)) {
+            QTextStream out(fdata);
+            // current time
+            out << QDateTime::currentDateTime().date().year() << "." <<
+                   QDateTime::currentDateTime().date().month() << "." <<
+                   QDateTime::currentDateTime().date().day() << "-" <<
+                   QDateTime::currentDateTime().time().hour() << ":" <<
+                   QDateTime::currentDateTime().time().minute() << ":" <<
+                   QDateTime::currentDateTime().time().second() << "\n";
+            if (headerchanged)
+                out << "PC config changed!\n" + PcView->GetStatic();
+
+            out << "Working time: " + ParseTime() + "\n";
+            out << "During this time: \n" + PcView->GetDynaminc() << "\n\n\n";
+        }
+    }
+    else {
+        if (fdata->open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QTextStream out(fdata);
+            // current time
+            out << QDateTime::currentDateTime().date().year() << "." <<
+                   QDateTime::currentDateTime().date().month() << "." <<
+                   QDateTime::currentDateTime().date().day() << "-" <<
+                   QDateTime::currentDateTime().time().hour() << ":" <<
+                   QDateTime::currentDateTime().time().minute() << ":" <<
+                   QDateTime::currentDateTime().time().second() << "\n";
+
+            out << "PC details:\n	Name:	" + name->text() + "\n	IP:	" + ip + "\n";
+            out << "PC config:\n" + PcView->GetStatic();
+            out << "Working time: " + ParseTime() + "\n";
+            out << "During this time: \n" + PcView->GetDynaminc() << "\n\n\n";
+        }
+    }
+
+    unsaved_data = false;
+    fdata->close();
+}
+QString pc::ParseTime()
+{
+    int i = timer.elapsed();
+
+    int s,m,h,d;
+
+    d = i / 86400000;
+    if (d > 0)
+        i -= d * 86400000;
+
+    h = i / 3600000;
+    if (h > 0)
+        i -= h * 3600000;
+
+    m = i / 60000;
+    if (m > 0)
+        i -= m * 60000;
+
+    s = i / 1000;
+    if (s > 0)
+        i -= s * 1000;
+
+    QString str = "";
+    if (d > 0)
+        str += QString::number(d) + " days ";
+    if (h > 0)
+        str += QString::number(h) + " hours ";
+    if (m > 0)
+        str += QString::number(m) + " minutes ";
+    if (s > 0)
+        str += QString::number(s) + " seconds ";
+    if (i > 0)
+        str += QString::number(i) + " milliseconds ";
+
+    return str;
 }
 
 // protected
@@ -195,7 +376,11 @@ void pc::mouseMoveEvent(QMouseEvent*)
 }
 void pc::mouseReleaseEvent(QMouseEvent*)
 {
-	if (view) {
+    if (remove)
+    {
+        MServ->RemovePC(this);
+    }
+    else if (view) {
 		if (!PcView->isVisible()){
 			PcView->setData(name->text(), ip);
 
@@ -238,7 +423,6 @@ void pc::GetRand(bool) {
 }
 void pc::ReadClient()
 {
-	qDebug() << "Read";
 	QDataStream in(Socket);
 	in.setVersion(QDataStream::Qt_5_5);
 
@@ -255,20 +439,13 @@ void pc::ReadClient()
 			break;
 
 		QString Msg;
-		in >> Msg;
-		qDebug() << Msg;
+        in >> Msg;
 
 		if (Msg == "Static")
 		{
 			staticInfo stI;
-			in >> stI;
+            in >> stI;
 
-			qDebug() << stI.PCName;
-			qDebug() << stI.OS;
-			qDebug() << stI.Bit;
-			qDebug() << stI.CPU;
-			qDebug() << stI.GPU;
-			qDebug() << stI.RAM;
 			PcView->setData(stI);
 			NBlockSize = 0;
 			break;
@@ -278,9 +455,6 @@ void pc::ReadClient()
 			dynamicInfo dnI;
 			in >> dnI;
 
-			qDebug() << dnI.CPU;
-			qDebug() << dnI.GPU;
-			qDebug() << dnI.RAM;
 			PcView->setData(dnI);
 			NBlockSize = 0;
 			break;
@@ -299,23 +473,77 @@ void pc::ReadClient()
 }
 void pc::Disconnect()
 {
-	MServ->logfile(name->text() + " disconnect from ip: " + ip);
-	Socket->close();
+    MServ->logfile(name->text() + " disconnect from ip: " + ip);
 
     if (Socket != NULL)
+    {
+        Socket->disconnectFromHost();
         Socket = NULL;
+    }
+    Save();
 
-    isConnected = false;
-    // instant ping
-    std::thread tping (ping, this);
-    tping.detach();
-
+    RunPing();
 }
+void pc::PcDataSet(QString NAME, QString IP)
+{
+    if (MServ->ExistIP(IP))
+    {
+        QMessageBox::critical(0,
+                      "Create pc error",
+                      "this ip already exists:");
 
+        MServ->rejectPC();
+        return;
+    }
+    if (MServ->ExistName(NAME))
+    {
+        QMessageBox::critical(0,
+                      "Create pc error",
+                      "this name already exists:");
+
+        MServ->rejectPC();
+        return;
+    }
+    MServ->acceptPC();
+
+    name->setText(NAME);
+    ip = IP;
+    MServ->unsave = true;
+    unsaved->show();
+
+    RunPing();
+}
 void pc::PcSetChanged(QString NAME, QString IP)
 {
+    if (MServ->ExistIP(IP))
+    {
+        QMessageBox::critical(0,
+                      "Create pc error",
+                      "this ip already exists:");
+        return;
+    }
+    if (MServ->ExistName(NAME))
+    {
+        QMessageBox::critical(0,
+                      "Create pc error",
+                      "this name already exists:");
+        return;
+    }
+
+    rename = true;
+    oldname = name->text();
 	name->setText(NAME);
 	ip = IP;
 	MServ->unsave = true;
 	unsaved->show();
+    if (Socket != NULL)
+        Socket->close();
+    qApp->processEvents(0, 150);
+
+    RunPing();
+
+}
+void pc::HeadChanged()
+{
+    headerchanged = true;
 }

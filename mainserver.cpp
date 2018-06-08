@@ -4,6 +4,7 @@
 #include "pc.h"
 #include "dep.h"
 #include "settings.h"
+#include "pcset.h"
 
 #include <QMessageBox>
 #include <QDateTime>
@@ -15,16 +16,18 @@ MainServer::MainServer(QWidget *parent) :
 	QMainWindow(parent),
 	ui(new Ui::MainServer)
 {
+    this->setWindowTitle("Сервер");
 	// SetUP
 	loadSettings();
 
 	mTcpServer = new QTcpServer(this);
-	if (!mTcpServer->listen(QHostAddress::AnyIPv4, Serverport)){
+    if (!mTcpServer->listen(QHostAddress::AnyIPv4, Serverport)){
 		QMessageBox::critical(0,
 							  "Server error",
 							  "Unable to srart the server:" + mTcpServer->errorString());
 
-		mTcpServer->close();
+        mTcpServer->close();
+        this->close();
 		logfile("Server is not started");
 		return;
 	}
@@ -40,6 +43,7 @@ MainServer::MainServer(QWidget *parent) :
 	ui->Center->setGeometry((this->width() - 4) / 2,
 							(this->height() - 4) / 2,
 							4, 4);
+    ui->Center->hide();
 	ws->stackUnder(ui->Center);
 	this->showMaximized();
 
@@ -58,6 +62,7 @@ MainServer::MainServer(QWidget *parent) :
 	connect(ui->SettingsButon, SIGNAL(clicked(bool)), SLOT(menuSettings(bool)));
 	connect(ui->AddPC, SIGNAL(toggled(bool)), SLOT(AddPc(bool)));
 	connect(ui->AddDep, SIGNAL(toggled(bool)), SLOT(AddDep(bool)));
+    connect(ui->RemovePC, SIGNAL(toggled(bool)), SLOT(RemovePC(bool)));
 	connect(ui->HomeButton, SIGNAL(clicked(bool)), SLOT(GoHome(bool)));
 
 	// load
@@ -66,30 +71,18 @@ MainServer::MainServer(QWidget *parent) :
 MainServer::~MainServer()
 {
 	logfile("Server closed");
-
-	delete mTcpServer;
-	if (mTcpSocket != NULL)
-		delete mTcpSocket;
-
-	for (int i = 0; i < pclist->count(); i++) {
-		delete pclist->at(i);
-	}
-	delete pclist;
-	delete ws;
-
-	delete flog;
-	delete fsettings;
-	delete fdata;
-
-	delete winset;
-	delete ui;
+    delete ui;
 }
 void MainServer::logfile(const QString& str)
 {
-	if (!flog->open(QIODevice::Append | QIODevice::Text)) {
-		QMessageBox::critical(0, "Log error", "Failed write to file");
-		return;
-	}
+    if (!flog->exists())
+        qDebug() << "log file does not exist";
+    if (!flog->open(QIODevice::Append | QIODevice::Text)) {
+        qDebug() << "Failed write to log file";
+
+        if (!flog->open(QIODevice::WriteOnly | QIODevice::Text))
+            return;
+    }
 
 	QTextStream out(flog);
 	out << QDateTime::currentDateTime().date().year() << "." <<
@@ -97,12 +90,13 @@ void MainServer::logfile(const QString& str)
 		   QDateTime::currentDateTime().date().day() << "-" <<
 		   QDateTime::currentDateTime().time().hour() << ":" <<
 		   QDateTime::currentDateTime().time().minute() << ":" <<
-		   QDateTime::currentDateTime().time().second() << "-" <<
+           QDateTime::currentDateTime().time().second() << "	" <<
 		   str << "\n";
 	flog->close();
 }
 void MainServer::moveWS(int x, int y)
 {
+    qDebug() << "Move";
 	ws->move(ws->x() - x, ws->y() - y);
 
 	ui->Center->move(ui->Center->x() - x, ui->Center->y() - y);
@@ -116,6 +110,8 @@ void MainServer::moveWS(int x, int y)
 	}
 	else
 		ui->HomeButton->hide();
+
+    qDebug() << "Move ---";
 }
 int MainServer::tryMove(pc *P, int &newx, int &newy)
 {
@@ -133,8 +129,12 @@ int MainServer::tryMove(pc *P, int &newx, int &newy)
 
 	bool x = true;
 	bool y = true;
+
 	pc* p;
 	dep* d;
+
+    int w = P->width();
+    int h = P->height();
 
 	// pc's
 	for(int i = 0; i < pclist->count(); i++) {
@@ -142,27 +142,27 @@ int MainServer::tryMove(pc *P, int &newx, int &newy)
 		if (p != P)
 			if (// Left Top
 				(newx		>= p->x() &&
-				 newx		<= p->x() + 48 &&
+                 newx		<= p->x() + w &&
 				 newy		>= p->y() &&
-				 newy		<= p->y() + 69) ||
+                 newy		<= p->y() + h) ||
 				// Left Bottom
 				(newx		>= p->x() &&
-				 newx		<= p->x() + 48 &&
-				 newy + 69	>= p->y() &&
-				 newy + 69	<= p->y() + 69) ||
+                 newx		<= p->x() + w &&
+                 newy + h	>= p->y() &&
+                 newy + h	<= p->y() + h) ||
 				// Right Top
-				(newx + 48	>= p->x() &&
-				 newx + 48	<= p->x() + 48 &&
+                (newx + w	>= p->x() &&
+                 newx + w	<= p->x() + w &&
 				 newy		>= p->y() &&
-				 newy		<= p->y() + 69) ||
+                 newy		<= p->y() + h) ||
 				// Right Bottom
-				(newx + 48	>= p->x() &&
-				 newx + 48	<= p->x() + 48 &&
-				 newy + 69	>= p->y() &&
-				 newy + 69	<= p->y() + 69))
+                (newx + w	>= p->x() &&
+                 newx + w	<= p->x() + w &&
+                 newy + h	>= p->y() &&
+                 newy + h	<= p->y() + h))
 			{
-				if (P->y()		< p->y() + 69 &&
-					P->y() + 69 > p->y()) { // Left & Right
+                if (P->y()		< p->y() + w &&
+                    P->y() + w > p->y()) { // Left & Right
 					x = false;
 				}
 				else { // Top & Bot
@@ -182,23 +182,23 @@ int MainServer::tryMove(pc *P, int &newx, int &newy)
 				// Left Bottom
 				(newx		>= d->x() &&
 				 newx		<= d->x() + d->width() &&
-				 newy + 69	>= d->y() &&
-				 newy + 69	<= d->y() + d->height()) ||
+                 newy + h	>= d->y() &&
+                 newy + h	<= d->y() + d->height()) ||
 				// Right Top
-				(newx + 48	>= d->x() &&
-				 newx + 48	<= d->x() + d->width() &&
+                (newx + w	>= d->x() &&
+                 newx + w	<= d->x() + d->width() &&
 				 newy		>= d->y() &&
 				 newy		<= d->y() + d->height()) ||
 				// Right Bottom
-				(newx + 48	>= d->x() &&
-				 newx + 48	<= d->x() + d->width() &&
-				 newy + 69	>= d->y() &&
-				 newy + 69	<= d->y() + d->height()))
+                (newx + w	>= d->x() &&
+                 newx + w	<= d->x() + d->width() &&
+                 newy + h	>= d->y() &&
+                 newy + h	<= d->y() + d->height()))
 		{
 			if (newx		> d->x() &&
 				newy		> d->y() &&
-				newx + 48	< d->x() + d->width() &&
-				newy + 69	< d->y() + d->height())
+                newx + w	< d->x() + d->width() &&
+                newy + h	< d->y() + d->height())
 			{
 				d->DropDown(true);
 
@@ -206,7 +206,7 @@ int MainServer::tryMove(pc *P, int &newx, int &newy)
 				P->Dep = d;
 			}
 			else if (P->y()		< d->y() + d->height() &&
-				P->y() + 69	> d->y()) { // Left & Right
+                P->y() + h	> d->y()) { // Left & Right
 				x = false;
 			}
 			else { // Top & Bot
@@ -281,7 +281,25 @@ int MainServer::tryDepMove(dep *P, int &newx, int &newy)
 }
 WS *MainServer::GetWS()
 {
-	return ws;
+    return ws;
+}
+bool MainServer::ExistName(QString &name)
+{
+    for (int i = 0; i < pclist->count(); i++)
+    {
+        if (pclist->at(i)->GetData()->Name == name)
+            return true;
+    }
+    return false;
+}
+bool MainServer::ExistIP(QString &ip)
+{
+    for (int i = 0; i < pclist->count(); i++)
+    {
+        if (pclist->at(i)->GetData()->IP == ip)
+            return true;
+    }
+    return false;
 }
 
 // private
@@ -340,22 +358,33 @@ void MainServer::loadData()
 		else if (name == "2")
 		{
 			in >> pdt;
-			pclist->push_back(new pc(pdt, deplist->last(), this));
-			pclist->last()->unsaved->hide();
-			pclist->last()->Dep = deplist->last();
+
+            if (!ExistIP(pdt.IP) && !ExistName(pdt.Name))
+            {
+                pclist->push_back(new pc(pdt, deplist->last(), this));
+                pclist->last()->unsaved->hide();
+                pclist->last()->Dep = deplist->last();
+            }
 		}
 		else if (name == "3")
 		{
 			in >> pdt;
-			pclist->push_back(new pc(pdt, ws, this));
-			pclist->last()->unsaved->hide();
+
+            if (!ExistIP(pdt.IP) && !ExistName(pdt.Name))
+            {
+                pclist->push_back(new pc(pdt, ws, this));
+                pclist->last()->unsaved->hide();
+            }
 		}
 	}
 	fdata->close();
+
+    for (int i = 0; i < pclist->count(); i++)
+        pclist->at(i)->RunPing();
 }
 void MainServer::resizeEvent(QResizeEvent*)
 {
-	ui->Menu->setGeometry(0, 0, this->width(), 51);
+    ui->Menu->setGeometry(0, 0, this->width(), 61);
 	ui->Center->move((this->width() - 4) / 2,
 					 (this->height() - 4) / 2);
 	ws->move(ui->Center->x() - 12500,
@@ -394,10 +423,10 @@ void MainServer::slotNewConnection()
 		return;
 	}
 
-	qDebug() << "New connection";
+//	qDebug() << "New connection";
 	for (int i = 0; i < pclist->count(); i++) {
-		qDebug() << "client" << mTcpSocket->peerAddress();
-		qDebug() << "ip: " + pclist->at(i)->GetData()->IP;
+//		qDebug() << "client" << mTcpSocket->peerAddress();
+//		qDebug() << "ip: " + pclist->at(i)->GetData()->IP;
 		if (mTcpSocket->peerAddress().toString() == pclist->at(i)->GetData()->IP) {
 			pclist->at(i)->Connect(mTcpSocket);
 
@@ -423,14 +452,16 @@ void MainServer::saveFile(bool)
 				{
 					out << "2\n" << *(pclist->at(j)->GetData()) << "\n";
 					pclist->at(j)->unsaved->hide();
+                    pclist->at(j)->Rename();
 				}
 			}
 		}
 		for (int j = 0; j < pclist->count(); j++) {
 			if (pclist->at(j)->unsaved->isVisible())
 			{
-				out << "3\n" << *(pclist->at(j)->GetData()) << "\n";
-				pclist->at(j)->unsaved->hide();
+                out << "3\n" << *(pclist->at(j)->GetData()) << "\n";
+                pclist->at(j)->unsaved->hide();
+                pclist->at(j)->Rename();
 			}
 		}
 
@@ -464,8 +495,7 @@ void MainServer::settingsChanged(quint16 port, QString nlf, QString ndf)
 	if (!mTcpServer->listen(QHostAddress::AnyIPv4, port)){
 		QMessageBox::critical(0, "Server error", "Unable to change the port:" + mTcpServer->errorString());
 
-		mTcpServer->close();
-		logfile("Server stopped");
+        mTcpServer->close();
 		this->close();
 		return;
 	}
@@ -482,17 +512,26 @@ void MainServer::settingsChanged(quint16 port, QString nlf, QString ndf)
 }
 void MainServer::newPC(int X, int Y)
 {
-	// заставить ввести данные
-	pcData dt;
-	dt.x = X;
-	dt.y = Y;
-	dt.Name = "localhost";
-	dt.IP = "127.0.0.1";
+    if (pcs != NULL)
+        delete pcs;
 
-	pclist->push_back(new pc(dt, ws, this));
-	pclist->last()->lower();
-	AddPc(false);
-	unsave = true;
+    pcs = new PcSet(this);
+    pcs->setWindowTitle("Ввод данных пк");
+    pcs->show();
+
+    pcData dt;
+    dt.x = X;
+    dt.y = Y;
+    dt.Name = "";
+    dt.IP = "";
+
+    pclist->push_back(new pc(dt, ws, this));
+    pclist->last()->lower();
+    AddPc(false);
+    unsave = true;
+
+    connect(pcs, SIGNAL(PcSetChanged(QString,QString)), pclist->last(), SLOT(PcDataSet(QString,QString)));
+    connect(pcs, SIGNAL(rejected()), this, SLOT(rejectPC()));
 }
 void MainServer::newDep(int x, int y)
 {
@@ -507,37 +546,101 @@ void MainServer::newDep(int x, int y)
 	deplist->push_back(new dep(dt, (QFrame*)ws, this));
 	deplist->last()->raise();
 	AddDep(false);
-	unsave = true;
+    unsave = true;
+}
+void MainServer::acceptPC()
+{
+    delete pcs;
+}
+void MainServer::rejectPC()
+{
+    delete pcs;
+
+    pclist->last()->~pc();
+    pclist->pop_back();
+}
+void MainServer::RemovePC(pc* p)
+{
+    for (int i = 0; i < pclist->count(); i++)
+    {
+        if (p->GetData()->IP == pclist->at(i)->GetData()->IP)
+        {
+            p->~pc();
+            pclist->removeAt(i);
+        }
+    }
+    unsave = true;
 }
 void MainServer::AddPc(bool state)
 {
 	if (state)
-	{
-		ui->AddPC->setChecked(state);
-		ui->AddDep->setEnabled(!state);
-		ws->toggleAddPC(state);
+    {
+        ui->RemovePC->setEnabled(false);
+        RemovePC(false);
+        ui->AddDep->setEnabled(false);
+        ws->toggleAddDep(false);
+
+
+        ui->AddPC->setChecked(true);
+        ws->toggleAddPC(true);
 	}
 	else
 	{
-		ui->AddPC->setChecked(state);
-		ui->AddDep->setEnabled(!state);
-		ws->toggleAddPC(state);
+        ui->AddDep->setEnabled(true);
+        ui->RemovePC->setEnabled(true);
+
+
+        ui->AddPC->setChecked(false);
+        ws->toggleAddPC(false);
 	}
 }
 void MainServer::AddDep(bool state)
 {
 	if (state)
-	{
-		ui->AddDep->setChecked(state);
-		ui->AddPC->setEnabled(!state);
-		ws->toggleAddDep(state);
+    {
+        ui->RemovePC->setEnabled(false);
+        RemovePC(false);
+        ui->AddPC->setEnabled(false);
+        ws->toggleAddPC(false);
+
+
+        ui->AddDep->setChecked(true);
+        ws->toggleAddDep(true);
 	}
 	else
-	{
-		ui->AddDep->setChecked(state);
-		ui->AddPC->setEnabled(!state);
-		ws->toggleAddDep(state);
-	}
+    {
+        ui->AddPC->setEnabled(true);
+        ui->RemovePC->setEnabled(true);
+
+
+        ui->AddDep->setChecked(false);
+        ws->toggleAddDep(false);
+    }
+}
+void MainServer::RemovePC(bool state)
+{
+    if (state)
+    {
+        ui->AddPC->setEnabled(false);
+        ws->toggleAddPC(false);
+        ui->AddDep->setEnabled(false);
+        ws->toggleAddDep(false);
+
+        for (int i = 0; i < pclist->count(); i++)
+            pclist->at(i)->Remove(true);
+
+        ui->RemovePC->setChecked(true);
+    }
+    else
+    {
+        ui->AddPC->setEnabled(true);
+        ui->AddDep->setEnabled(true);
+
+        for (int i = 0; i < pclist->count(); i++)
+            pclist->at(i)->Remove(false);
+
+        ui->RemovePC->setChecked(false);
+    }
 }
 void MainServer::GoHome(bool)
 {
