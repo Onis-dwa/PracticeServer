@@ -96,7 +96,6 @@ void MainServer::logfile(const QString& str)
 }
 void MainServer::moveWS(int x, int y)
 {
-    qDebug() << "Move";
 	ws->move(ws->x() - x, ws->y() - y);
 
 	ui->Center->move(ui->Center->x() - x, ui->Center->y() - y);
@@ -110,8 +109,6 @@ void MainServer::moveWS(int x, int y)
 	}
 	else
 		ui->HomeButton->hide();
-
-    qDebug() << "Move ---";
 }
 int MainServer::tryMove(pc *P, int &newx, int &newy)
 {
@@ -512,9 +509,6 @@ void MainServer::settingsChanged(quint16 port, QString nlf, QString ndf)
 }
 void MainServer::newPC(int X, int Y)
 {
-    if (pcs != NULL)
-        delete pcs;
-
     pcs = new PcSet(this);
     pcs->setWindowTitle("Ввод данных пк");
     pcs->show();
@@ -550,10 +544,12 @@ void MainServer::newDep(int x, int y)
 }
 void MainServer::acceptPC()
 {
+    pcs->close();
     delete pcs;
 }
 void MainServer::rejectPC()
 {
+    pcs->close();
     delete pcs;
 
     pclist->last()->~pc();

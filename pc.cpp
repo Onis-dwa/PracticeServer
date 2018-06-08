@@ -140,7 +140,7 @@ void pc::Connect(QTcpSocket* skt) {
 
 
     isConnected = true;
-    qApp->processEvents(0, 150);
+//    qApp->processEvents(0, 150);
 
 	Socket = skt;
 
